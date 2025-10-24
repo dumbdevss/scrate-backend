@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * @dev Marketplace contract for trading IP-NFTs with auction and direct sale functionality
  */
 contract IPNFTMarketplace is ReentrancyGuard, Ownable {
+    
     uint256 private _listingIds;
     uint256 private _auctionIds;
     
@@ -122,8 +123,8 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         require(block.timestamp < auctions[auctionId].endTime, "Auction ended");
         _;
     }
-    
-    constructor() {}
+
+    constructor() Ownable(msg.sender) {}
     
     /**
      * @dev List an IP-NFT for direct sale

@@ -143,8 +143,8 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         );
         _;
     }
-    
-    constructor(address _disputeResolver) {
+
+       constructor(address _disputeResolver) Ownable(msg.sender) {
         disputeResolver = _disputeResolver;
     }
     
@@ -521,4 +521,5 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
     function getTotalEscrows() external view returns (uint256) {
         return _escrowIds;
     }
+    
 }
