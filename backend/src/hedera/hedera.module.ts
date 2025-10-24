@@ -7,4 +7,4 @@ import { HederaController } from './controllers/hedera.controller';
   providers: [HederaService],
   exports: [HederaService],
 })
-export class HederaModule {}
+export class HederaModule {} 

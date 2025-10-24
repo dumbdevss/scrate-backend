@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 /**
  * @title IPNFTEscrow
@@ -12,9 +11,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
  * Allows secure transactions with verification requirements from both parties
  */
 contract IPNFTEscrow is ReentrancyGuard, Ownable {
-    using Counters for Counters.Counter;
-    
-    Counters.Counter private _escrowIds;
+    uint256 private _escrowIds;
     
     enum EscrowStatus {
         Active,
@@ -179,8 +176,8 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         // Transfer NFT to escrow
         IERC721(tokenContract).transferFrom(msg.sender, address(this), tokenId);
         
-        _escrowIds.increment();
-        uint256 escrowId = _escrowIds.current();
+        _escrowIds++;
+        uint256 escrowId = _escrowIds;
         
         EscrowAgreement storage escrow = escrows[escrowId];
         escrow.escrowId = escrowId;
@@ -522,6 +519,6 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
      * @dev Get total number of escrows
      */
     function getTotalEscrows() external view returns (uint256) {
-        return _escrowIds.current();
+        return _escrowIds;
     }
 }

@@ -5,17 +5,14 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
 
 /**
  * @title IPNFTMarketplace
  * @dev Marketplace contract for trading IP-NFTs with auction and direct sale functionality
  */
 contract IPNFTMarketplace is ReentrancyGuard, Ownable {
-    using Counters for Counters.Counter;
-    
-    Counters.Counter private _listingIds;
-    Counters.Counter private _auctionIds;
+    uint256 private _listingIds;
+    uint256 private _auctionIds;
     
     // Platform fee (in basis points, e.g., 250 = 2.5%)
     uint256 public platformFee = 250;
@@ -143,8 +140,8 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         // Transfer token to marketplace
         IERC721(tokenContract).transferFrom(msg.sender, address(this), tokenId);
         
-        _listingIds.increment();
-        uint256 listingId = _listingIds.current();
+        _listingIds++;
+        uint256 listingId = _listingIds;
         
         listings[listingId] = Listing({
             listingId: listingId,
@@ -251,8 +248,8 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         // Transfer token to marketplace
         IERC721(tokenContract).transferFrom(msg.sender, address(this), tokenId);
         
-        _auctionIds.increment();
-        uint256 auctionId = _auctionIds.current();
+        _auctionIds++;
+        uint256 auctionId = _auctionIds;
         
         auctions[auctionId] = Auction({
             auctionId: auctionId,
@@ -403,13 +400,13 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
      * @dev Get total number of listings
      */
     function getTotalListings() external view returns (uint256) {
-        return _listingIds.current();
+        return _listingIds;
     }
     
     /**
      * @dev Get total number of auctions
      */
     function getTotalAuctions() external view returns (uint256) {
-        return _auctionIds.current();
+        return _auctionIds;
     }
 }
