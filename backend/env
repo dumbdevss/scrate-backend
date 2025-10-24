@@ -1,0 +1,18 @@
+# Hedera Configuration
+HEDERA_OPERATOR_ID=0.0.123456
+HEDERA_OPERATOR_KEY=302e020100300506032b657004220420...
+HEDERA_NETWORK=testnet
+IPNFT_COLLECTION_ID=
+
+# Supabase Configuration
+SUPABASE_URL=https://usjycefeucupnyvbmrnj.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzanljZWZldWN1cG55dmJtcm5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyNTQ0ODEsImV4cCI6MjA3NjgzMDQ4MX0.hKdU-pAWIbf7bQlBxf9BtQrVYruopeL-ciNpw_jOcso
+SUPABASE_SERVICE_KEY=your-service-key
+
+# API Configuration
+PORT=3000
+NODE_ENV=development
+
+# Smart Contract Addresses (for marketplace and escrow)
+MARKETPLACE_CONTRACT_ADDRESS=
+ESCROW_CONTRACT_ADDRESS=
