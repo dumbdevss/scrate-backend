@@ -74,7 +74,7 @@ export class SmartContractService {
       }
 
       this.operatorId = AccountId.fromString(operatorIdStr);
-      this.operatorKey = PrivateKey.fromString(operatorKeyStr);
+      this.operatorKey = PrivateKey.fromStringECDSA(operatorKeyStr);
 
       // Initialize client based on network
       switch (network) {
@@ -95,13 +95,33 @@ export class SmartContractService {
       const escrowAddress = this.configService.get<string>('ESCROW_CONTRACT_ADDRESS');
 
       if (marketplaceAddress) {
-        this.marketplaceContractId = ContractId.fromString(marketplaceAddress);
-        this.logger.log(`Marketplace contract initialized at ${marketplaceAddress}`);
+        try {
+          // Check if it's a Solidity address (starts with 0x)
+          if (marketplaceAddress.startsWith('0x')) {
+            this.marketplaceContractId = ContractId.fromSolidityAddress(marketplaceAddress);
+          } else {
+            this.marketplaceContractId = ContractId.fromString(marketplaceAddress);
+          }
+          this.logger.log(`Marketplace contract initialized at ${marketplaceAddress}`);
+        } catch (error) {
+          this.logger.error(`Failed to parse marketplace contract address: ${error.message}`);
+          throw error;
+        }
       }
 
       if (escrowAddress) {
-        this.escrowContractId = ContractId.fromString(escrowAddress);
-        this.logger.log(`Escrow contract initialized at ${escrowAddress}`);
+        try {
+          // Check if it's a Solidity address (starts with 0x)
+          if (escrowAddress.startsWith('0x')) {
+            this.escrowContractId = ContractId.fromSolidityAddress(escrowAddress);
+          } else {
+            this.escrowContractId = ContractId.fromString(escrowAddress);
+          }
+          this.logger.log(`Escrow contract initialized at ${escrowAddress}`);
+        } catch (error) {
+          this.logger.error(`Failed to parse escrow contract address: ${error.message}`);
+          throw error;
+        }
       }
 
       this.logger.log(`Hedera client initialized for ${network}`);

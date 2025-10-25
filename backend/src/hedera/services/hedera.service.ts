@@ -16,15 +16,15 @@ import {
   TokenAssociateTransaction,
   NftId,
 } from '@hashgraph/sdk';
-import { 
-  MintIPNFTDto, 
+import {
+  MintIPNFTDto,
   IPNFTAnalyticsDto
 } from '../dto/ipnft.dto';
-import { 
-  HederaConfig, 
-  CollectionInfo, 
-  MintResult, 
-  NftInfo 
+import {
+  HederaConfig,
+  CollectionInfo,
+  MintResult,
+  NftInfo
 } from '../interfaces/hedera.interface';
 
 interface IPNFTMetadata {
@@ -73,7 +73,7 @@ export class HederaService {
     }
 
     this.operatorId = AccountId.fromString(config.operatorId);
-    this.operatorKey = PrivateKey.fromString(config.operatorKey);
+    this.operatorKey = PrivateKey.fromStringECDSA(config.operatorKey);
 
     switch (config.network) {
       case 'mainnet':
@@ -88,7 +88,7 @@ export class HederaService {
 
     this.client.setOperator(this.operatorId, this.operatorKey);
     this.logger.log(`Hedera client initialized for ${config.network}`);
-    
+
     // Set the IP-NFT collection ID from config or create one
     this.ipnftCollectionId = this.configService.get<string>('IPNFT_COLLECTION_ID', '');
   }
@@ -96,7 +96,7 @@ export class HederaService {
   private initializeSupabase() {
     const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
     const supabaseKey = this.configService.get<string>('SUPABASE_ANON_KEY');
-    
+
     if (supabaseUrl && supabaseKey) {
       // For now, we'll use a simple object to simulate Supabase
       // In production, you would use: this.supabase = createClient(supabaseUrl, supabaseKey);
@@ -125,15 +125,14 @@ export class HederaService {
         .setTokenName('Intellectual Property NFTs')
         .setTokenSymbol('IPNFT')
         .setTokenType(TokenType.NonFungibleUnique)
-        .setDecimals(0)
-        .setInitialSupply(0)
         .setTreasuryAccountId(this.operatorId)
-        .setSupplyType(TokenSupplyType.Infinite)
         .setSupplyKey(this.operatorKey)
-        .setAdminKey(this.operatorKey)
-        .setMaxTransactionFee(new Hbar(30));
+        .freezeWith(this.client)
 
-      const tokenCreateSubmit = await tokenCreateTx.execute(this.client);
+      const signTxTokenCreate = await tokenCreateTx.sign(this.operatorKey);
+
+      const tokenCreateSubmit = await signTxTokenCreate.execute(this.client);
+
       const tokenCreateReceipt = await tokenCreateSubmit.getReceipt(this.client);
       const tokenId = tokenCreateReceipt.tokenId;
 
@@ -179,7 +178,7 @@ export class HederaService {
 
       const tokenId = AccountId.fromString(this.ipnftCollectionId);
       const recipientId = AccountId.fromString(mintDto.recipient);
-      
+
       // Create comprehensive metadata
       const metadata: IPNFTMetadata = {
         schema_version: '1.0.0',
@@ -278,7 +277,7 @@ export class HederaService {
 
       const tokenId = AccountId.fromString(this.ipnftCollectionId);
       const nftId = new NftId(tokenId, serialNumber);
-      
+
       const nftInfo = await new TokenNftInfoQuery()
         .setNftId(nftId)
         .execute(this.client);
@@ -299,7 +298,7 @@ export class HederaService {
   async getAnalytics(): Promise<IPNFTAnalyticsDto> {
     try {
       const today = new Date().toISOString().split('T')[0];
-      
+
       // Get analytics from database
       const { data: totalMinted } = await this.supabase
         .from('ipnfts')
@@ -342,7 +341,7 @@ export class HederaService {
   private async updateAnalytics(type: string, count: number) {
     try {
       const today = new Date().toISOString().split('T')[0];
-      
+
       await this.supabase.from('daily_analytics').insert({
         date: today,
         transaction_type: type,
@@ -384,13 +383,16 @@ export class HederaService {
   }
 
   async getCollectionInfo(): Promise<CollectionInfo> {
+    console.log(this.ipnftCollectionId);
     if (!this.ipnftCollectionId) {
       throw new BadRequestException('IP-NFT collection not initialized');
     }
 
     const tokenId = AccountId.fromString(this.ipnftCollectionId);
+
+    console.log(tokenId);
     const tokenInfo = await new TokenInfoQuery()
-      .setTokenId(tokenId)
+      .setTokenId(this.ipnftCollectionId)
       .execute(this.client);
 
     return {
