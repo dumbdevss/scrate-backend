@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   Client,
   AccountId,
@@ -53,7 +54,7 @@ export class HederaService {
   private client: Client;
   private operatorId: AccountId;
   private operatorKey: PrivateKey;
-  private supabase: any;
+  private supabase: SupabaseClient;
   private ipnftCollectionId: string;
 
   constructor(private configService: ConfigService) {
@@ -97,23 +98,17 @@ export class HederaService {
     const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
     const supabaseKey = this.configService.get<string>('SUPABASE_ANON_KEY');
 
-    if (supabaseUrl && supabaseKey) {
-      // For now, we'll use a simple object to simulate Supabase
-      // In production, you would use: this.supabase = createClient(supabaseUrl, supabaseKey);
-      this.supabase = {
-        from: (table: string) => ({
-          insert: (data: any) => Promise.resolve({ data, error: null }),
-          select: (columns?: string) => ({
-            eq: (column: string, value: any) => Promise.resolve({ data: [], error: null }),
-            gte: (column: string, value: any) => Promise.resolve({ data: [], error: null }),
-            order: (column: string, options?: any) => Promise.resolve({ data: [], error: null }),
-          }),
-          update: (data: any) => ({
-            eq: (column: string, value: any) => Promise.resolve({ data, error: null }),
-          }),
-        }),
-      };
-      this.logger.log('Supabase client initialized');
+    if (!supabaseUrl || !supabaseKey) {
+      this.logger.warn('SUPABASE_URL and SUPABASE_ANON_KEY must be provided in environment variables');
+      throw new Error('Supabase configuration is required');
+    }
+
+    try {
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+      this.logger.log('Supabase client initialized successfully');
+    } catch (error) {
+      this.logger.error(`Failed to initialize Supabase client: ${error.message}`);
+      throw error;
     }
   }
 
@@ -153,13 +148,21 @@ export class HederaService {
       };
 
       // Store collection info in database
-      await this.supabase.from('ipnft_collections').insert({
+      const { data, error } = await this.supabase.from('ipnft_collections').insert({
         token_id: tokenId.toString(),
         token_address: `0.0.${tokenId.num}`,
         name: 'Intellectual Property NFTs',
         symbol: 'IPNFT',
         created_at: new Date().toISOString(),
       });
+
+      if (error) {
+        this.logger.error(`Failed to store collection in database: ${error.message}`);
+        // Don't throw here as the token was created successfully on Hedera
+        this.logger.warn('Collection created on Hedera but not stored in database');
+      } else {
+        this.logger.log('Collection info stored in database successfully');
+      }
 
       return collectionInfo;
     } catch (error) {
@@ -242,7 +245,15 @@ export class HederaService {
         transaction_id: mintTxSubmit.transactionId?.toString() || '',
       };
 
-      await this.supabase.from('ipnfts').insert(ipnftRecord);
+      const { data: insertData, error: insertError } = await this.supabase.from('ipnfts').insert(ipnftRecord);
+
+      if (insertError) {
+        this.logger.error(`Failed to store IP-NFT in database: ${insertError.message}`);
+        // Don't throw here as the NFT was minted successfully on Hedera
+        this.logger.warn('IP-NFT minted on Hedera but not stored in database');
+      } else {
+        this.logger.log('IP-NFT info stored in database successfully');
+      }
 
       // Update analytics
       await this.updateAnalytics('mint', 1);
@@ -299,30 +310,50 @@ export class HederaService {
     try {
       const today = new Date().toISOString().split('T')[0];
 
-      // Get analytics from database
-      const { data: totalMinted } = await this.supabase
+      // Get analytics from database with proper error handling
+      const { data: totalMinted, error: mintedError } = await this.supabase
         .from('ipnfts')
         .select('*');
 
-      const { data: dailyTransactions } = await this.supabase
+      if (mintedError) {
+        this.logger.error(`Failed to get minted NFTs: ${mintedError.message}`);
+      }
+
+      const { data: dailyTransactions, error: transactionsError } = await this.supabase
         .from('transactions')
         .select('*')
         .gte('created_at', today);
 
-      const { data: activeListings } = await this.supabase
+      if (transactionsError) {
+        this.logger.error(`Failed to get daily transactions: ${transactionsError.message}`);
+      }
+
+      const { data: activeListings, error: listingsError } = await this.supabase
         .from('marketplace_listings')
         .select('*')
         .eq('status', 'active');
 
-      const { data: activeAuctions } = await this.supabase
+      if (listingsError) {
+        this.logger.error(`Failed to get active listings: ${listingsError.message}`);
+      }
+
+      const { data: activeAuctions, error: auctionsError } = await this.supabase
         .from('marketplace_auctions')
         .select('*')
         .eq('status', 'active');
 
-      const { data: activeEscrows } = await this.supabase
+      if (auctionsError) {
+        this.logger.error(`Failed to get active auctions: ${auctionsError.message}`);
+      }
+
+      const { data: activeEscrows, error: escrowsError } = await this.supabase
         .from('escrows')
         .select('*')
         .eq('status', 'active');
+
+      if (escrowsError) {
+        this.logger.error(`Failed to get active escrows: ${escrowsError.message}`);
+      }
 
       return {
         totalMinted: totalMinted?.length || 0,
@@ -342,12 +373,18 @@ export class HederaService {
     try {
       const today = new Date().toISOString().split('T')[0];
 
-      await this.supabase.from('daily_analytics').insert({
+      const { data, error } = await this.supabase.from('daily_analytics').insert({
         date: today,
         transaction_type: type,
         count: count,
         created_at: new Date().toISOString(),
       });
+
+      if (error) {
+        this.logger.warn(`Failed to update analytics: ${error.message}`);
+      } else {
+        this.logger.log(`Analytics updated successfully for ${type}`);
+      }
     } catch (error) {
       this.logger.warn(`Failed to update analytics: ${error.message}`);
     }
