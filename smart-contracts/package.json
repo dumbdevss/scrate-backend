@@ -1,5 +1,5 @@
 {
-  "name": "hts-evm-mint-nfts",
+  "name": "ipnft-smart-contracts",
   "version": "1.0.0",
   "type": "module",
   "devDependencies": {
@@ -18,6 +18,14 @@
   },
   "dependencies": {
     "@hashgraph/smart-contracts": "github:hashgraph/hedera-smart-contracts",
+    "@nomicfoundation/hardhat-ethers": "^4.0.2",
+    "@nomicfoundation/hardhat-ethers-chai-matchers": "^3.0.0",
+    "@nomicfoundation/hardhat-ignition-ethers": "^3.0.3",
+    "@nomicfoundation/hardhat-keystore": "^3.0.2",
+    "@nomicfoundation/hardhat-mocha": "^3.0.4",
+    "@nomicfoundation/hardhat-network-helpers": "^3.0.1",
+    "@nomicfoundation/hardhat-typechain": "^3.0.0",
+    "@nomicfoundation/hardhat-verify": "^3.0.4",
     "@openzeppelin/contracts": "^5.4.0"
   }
 }

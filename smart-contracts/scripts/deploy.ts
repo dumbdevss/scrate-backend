@@ -3,28 +3,27 @@ import { network } from "hardhat";
 const { ethers } = await network.connect({ network: "testnet" });
 
 async function main() {
-  console.log("Deploying IP-NFT Platform Smart Contracts...");
-
-  // Get the deployer account
   const [deployer] = await ethers.getSigners();
-  console.log("Deploying contracts with account:", deployer.address);
-  console.log("Account balance:", (await deployer.getBalance()).toString());
+  console.log("Deploying contracts with the account:", deployer.address);
+  console.log("Account balance:", (await ethers.provider.getBalance(deployer.address)).toString());
 
-  // Deploy IPNFTMarketplace
+  // 1) Deploy IPNFTMarketplace
   console.log("\n1. Deploying IPNFTMarketplace...");
   const IPNFTMarketplace = await ethers.getContractFactory("IPNFTMarketplace");
   const marketplace = await IPNFTMarketplace.deploy();
-  await marketplace.deployed();
-  console.log("IPNFTMarketplace deployed to:", marketplace.address);
+  await marketplace.waitForDeployment();
+  const marketplaceAddress = await marketplace.getAddress();
+  console.log("IPNFTMarketplace deployed to:", marketplaceAddress);
 
-  // Deploy IPNFTEscrow with dispute resolver (using deployer as initial resolver)
+  // 2) Deploy IPNFTEscrow with dispute resolver
   console.log("\n2. Deploying IPNFTEscrow...");
   const IPNFTEscrow = await ethers.getContractFactory("IPNFTEscrow");
-  const escrow = await IPNFTEscrow.deploy(deployer.address);
-  await escrow.deployed();
-  console.log("IPNFTEscrow deployed to:", escrow.address);
+  const escrow = await IPNFTEscrow.deploy(deployer.address); // Using deployer as initial dispute resolver
+  await escrow.waitForDeployment();
+  const escrowAddress = await escrow.getAddress();
+  console.log("IPNFTEscrow deployed to:", escrowAddress);
 
-  // Verify initial configuration
+  // 3) Verify initial configuration
   console.log("\n3. Verifying initial configuration...");
   
   const marketplaceFee = await marketplace.platformFee();
@@ -36,18 +35,18 @@ async function main() {
   const disputeResolver = await escrow.disputeResolver();
   console.log("Dispute resolver:", disputeResolver);
 
-  // Save deployment addresses
+  // 4) Save deployment info
   const deploymentInfo = {
-    network: await ethers.provider.getNetwork(),
+    network: (await ethers.provider.getNetwork()).name,
     deployer: deployer.address,
     contracts: {
       IPNFTMarketplace: {
-        address: marketplace.address,
-        transactionHash: marketplace.deployTransaction.hash,
+        address: marketplaceAddress,
+        transactionHash: marketplace.deploymentTransaction()?.hash,
       },
       IPNFTEscrow: {
-        address: escrow.address,
-        transactionHash: escrow.deployTransaction.hash,
+        address: escrowAddress,
+        transactionHash: escrow.deploymentTransaction()?.hash,
       },
     },
     deployedAt: new Date().toISOString(),
@@ -55,32 +54,9 @@ async function main() {
 
   console.log("\n4. Deployment Summary:");
   console.log(JSON.stringify(deploymentInfo, null, 2));
-
-  // Save to file
-  const fs = require('fs');
-  const path = require('path');
-  
-  const deploymentsDir = path.join(__dirname, '../deployments');
-  if (!fs.existsSync(deploymentsDir)) {
-    fs.mkdirSync(deploymentsDir);
-  }
-  
-  const networkName = deploymentInfo.network.name;
-  const deploymentFile = path.join(deploymentsDir, `${networkName}.json`);
-  fs.writeFileSync(deploymentFile, JSON.stringify(deploymentInfo, null, 2));
-  
-  console.log(`\nDeployment info saved to: ${deploymentFile}`);
-  
-  console.log("\n✅ Deployment completed successfully!");
-  console.log("\nNext steps:");
-  console.log("1. Update your .env file with the contract addresses");
-  console.log("2. Verify contracts on block explorer if needed");
-  console.log("3. Configure marketplace and escrow settings as needed");
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

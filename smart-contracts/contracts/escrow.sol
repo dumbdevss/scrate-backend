@@ -372,8 +372,8 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         
         // Check if any verifications are completed
         bool hasCompletedVerifications = false;
-        for (uint256 i = 0; i < escrow.verificationRequirements.length; i++) {
-            if (escrow.verificationRequirements[i].sellerCompleted) {
+        for (uint256 i = 0; i < escrowVerificationRequirements[escrowId].length; i++) {
+            if (escrowVerificationRequirements[escrowId][i].sellerCompleted) {
                 hasCompletedVerifications = true;
                 break;
             }
@@ -408,11 +408,11 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         bool allSellerCompleted = true;
         bool allBuyerApproved = true;
         
-        for (uint256 i = 0; i < escrow.verificationRequirements.length; i++) {
-            if (!escrow.verificationRequirements[i].sellerCompleted) {
+        for (uint256 i = 0; i < escrowVerificationRequirements[escrowId].length; i++) {
+            if (!escrowVerificationRequirements[escrowId][i].sellerCompleted) {
                 allSellerCompleted = false;
             }
-            if (!escrow.verificationRequirements[i].buyerApproved) {
+            if (!escrowVerificationRequirements[escrowId][i].buyerApproved) {
                 allBuyerApproved = false;
             }
         }
@@ -462,7 +462,7 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         view 
         returns (VerificationRequirement[] memory) 
     {
-        return escrows[escrowId].verificationRequirements;
+        return escrowVerificationRequirements[escrowId];
     }
     
     /**
@@ -473,7 +473,7 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         view 
         returns (string[] memory) 
     {
-        return escrows[escrowId].sellerEvidence;
+        return escrowSellerEvidence[escrowId];
     }
     
     /**
@@ -484,7 +484,7 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         view 
         returns (string[] memory) 
     {
-        return escrows[escrowId].buyerComments;
+        return escrowBuyerComments[escrowId];
     }
     
     /**
