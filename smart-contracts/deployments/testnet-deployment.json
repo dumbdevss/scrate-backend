@@ -1,0 +1,18 @@
+{
+  "network": "testnet",
+  "deployer": "0xb797Af5E4514129e6aFC8cE0744f7df10C14aC5b",
+  "contracts": {
+    "IPNFTMarketplace": {
+      "address": "0x90B815E2c4b2A6c78a5C579d8838Acb526c0dD52",
+      "transactionHash": "0xd5ef2a460eb682e5c253e4424ef583ff8ec3f855e5ff578f95f1df873df1b71b",
+      "platformFee": "250"
+    },
+    "IPNFTEscrow": {
+      "address": "0x36928027C0488EF8Bbc1A81a8761E9f01C0C0279",
+      "transactionHash": "0x8585e7e19636dbcc2ed001a07a3a12ee678a803b1f5056e3741f88e939840179",
+      "escrowFeeRate": "100",
+      "disputeResolver": "0xb797Af5E4514129e6aFC8cE0744f7df10C14aC5b"
+    }
+  },
+  "deployedAt": "2025-10-25T04:07:44.888Z"
+}
