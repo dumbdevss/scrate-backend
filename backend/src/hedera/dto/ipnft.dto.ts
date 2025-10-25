@@ -285,3 +285,77 @@ export class IPNFTAnalyticsDto {
   @ApiProperty({ description: 'Total volume in HBAR' })
   totalVolume: number;
 }
+
+export class CollectionInfoDto {
+  @ApiProperty({ description: 'The ID of the token' })
+  @IsString()
+  tokenId: string;
+
+  @ApiProperty({ description: 'The EVM address of the token' })
+  @IsString()
+  tokenAddress: string;
+
+  @ApiProperty({ description: 'The name of the token' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ description: 'The symbol of the token' })
+  @IsString()
+  symbol: string;
+
+  @ApiProperty({ description: 'The total supply of the token' })
+  @IsNumber()
+  totalSupply: number;
+
+  @ApiProperty({ description: 'The maximum supply of the token', required: false })
+  @IsNumber()
+  @IsOptional()
+  maxSupply?: number;
+
+  @ApiProperty({ description: 'The treasury account ID for the token' })
+  @IsString()
+  treasuryAccountId: string;
+}
+
+export class NftInfoDto {
+  @ApiProperty({ description: 'The ID of the token' })
+  @IsString()
+  tokenId: string;
+
+  @ApiProperty({ description: 'The serial number of the NFT' })
+  @IsNumber()
+  serialNumber: number;
+
+  @ApiProperty({ description: 'The account ID that owns the NFT' })
+  @IsString()
+  accountId: string;
+
+  @ApiProperty({ description: 'The metadata of the NFT' })
+  @IsString()
+  metadata: string;
+
+  @ApiProperty({ description: 'The creation timestamp of the NFT' })
+  @IsString()
+  createdTimestamp: string;
+}
+
+export class MintResultDto {
+  @ApiProperty({ description: 'The ID of the token' })
+  @IsString()
+  tokenId: string;
+
+  @ApiProperty({ description: 'The serial numbers of the minted NFTs', type: [Number] })
+  @IsArray()
+  @IsNumber({}, { each: true })
+  serialNumbers: number[];
+
+  @ApiProperty({ description: 'The ID of the minting transaction' })
+  @IsString()
+  transactionId: string;
+
+  @ApiProperty({ description: 'Information about the minted NFTs', type: [NftInfoDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NftInfoDto)
+  nftInfo: NftInfoDto[];
+}

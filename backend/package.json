@@ -33,7 +33,8 @@
     "rxjs": "^7.8.1",
     "ajv": "^8.12.0",
     "ajv-formats": "^2.1.1",
-    "multiformats": "^12.1.3"
+    "multiformats": "^12.1.3",
+    "ethers": "^6.8.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

@@ -18,10 +18,7 @@ import {
 } from '@hashgraph/sdk';
 import { 
   MintIPNFTDto, 
-  IPNFTAnalyticsDto,
-  MarketplaceListingDto,
-  MarketplaceAuctionDto,
-  EscrowCreateDto
+  IPNFTAnalyticsDto
 } from '../dto/ipnft.dto';
 import { 
   HederaConfig, 

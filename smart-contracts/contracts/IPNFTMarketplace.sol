@@ -206,6 +206,54 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
             listing.price
         );
     }
+
+    /**
+     * @dev Purchase an IP-NFT directly (alternative to buyItem with same functionality)
+     */
+    function purchaseIPNFT(uint256 listingId) 
+        external 
+        payable 
+        validListing(listingId) 
+        nonReentrant 
+    {
+        Listing storage listing = listings[listingId];
+        require(msg.value >= listing.price, "Insufficient payment");
+        require(msg.sender != listing.seller, "Cannot purchase own item");
+        
+        listing.active = false;
+        tokenToListing[listing.tokenContract][listing.tokenId] = 0;
+        
+        // Calculate platform fee
+        uint256 fee = (listing.price * platformFee) / 10000;
+        uint256 sellerAmount = listing.price - fee;
+        
+        // Transfer token to buyer
+        IERC721(listing.tokenContract).transferFrom(
+            address(this),
+            msg.sender,
+            listing.tokenId
+        );
+        
+        // Transfer payments
+        payable(listing.seller).transfer(sellerAmount);
+        if (fee > 0) {
+            payable(owner()).transfer(fee);
+        }
+        
+        // Refund excess payment
+        if (msg.value > listing.price) {
+            payable(msg.sender).transfer(msg.value - listing.price);
+        }
+        
+        emit ItemSold(
+            listingId,
+            listing.tokenContract,
+            listing.tokenId,
+            listing.seller,
+            msg.sender,
+            listing.price
+        );
+    }
     
     /**
      * @dev Cancel a listing

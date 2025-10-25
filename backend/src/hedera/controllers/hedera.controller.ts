@@ -4,27 +4,28 @@ import { HederaService } from '../services/hedera.service';
 import { 
   MintIPNFTDto, 
   IPNFTAnalyticsDto,
-  MarketplaceListingDto,
-  MarketplaceAuctionDto,
-  EscrowCreateDto
+  CollectionInfoDto,
+  MintResultDto,
+  NftInfoDto
 } from '../dto/ipnft.dto';
 import { CollectionInfo, MintResult, NftInfo } from '../interfaces/hedera.interface';
 
-@ApiTags('IP-NFT System')
-@Controller('ipnft')
-export class HederaController {
+@ApiTags('IP-NFT Management')
+@Controller('api/ipnft')
+export class IPNFTController {
   constructor(private readonly hederaService: HederaService) {}
 
+  // IP-NFT Core Management
   @Post('collection/create')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create the main IP-NFT collection on Hedera' })
   @ApiResponse({ 
     status: 201, 
     description: 'IP-NFT collection created successfully',
-    type: Object
+    type: CollectionInfoDto
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async createIPNFTCollection(): Promise<CollectionInfo> {
+  async createCollection(): Promise<CollectionInfo> {
     return this.hederaService.createIPNFTCollection();
   }
 
@@ -34,7 +35,7 @@ export class HederaController {
   @ApiResponse({ 
     status: 201, 
     description: 'IP-NFT minted successfully',
-    type: Object
+    type: MintResultDto
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async mintIPNFT(@Body() mintDto: MintIPNFTDto): Promise<MintResult> {
@@ -46,20 +47,20 @@ export class HederaController {
   @ApiResponse({ 
     status: 200, 
     description: 'Collection information retrieved successfully',
-    type: Object
+    type: CollectionInfoDto
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async getCollectionInfo(): Promise<CollectionInfo> {
     return this.hederaService.getCollectionInfo();
   }
 
-  @Get('nft/:serialNumber')
+  @Get(':serialNumber')
   @ApiOperation({ summary: 'Get information about a specific IP-NFT' })
   @ApiParam({ name: 'serialNumber', description: 'Serial number of the IP-NFT' })
   @ApiResponse({ 
     status: 200, 
     description: 'IP-NFT information retrieved successfully',
-    type: Object
+    type: NftInfoDto
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async getIPNFTInfo(@Param('serialNumber') serialNumber: string): Promise<NftInfo> {
@@ -77,53 +78,6 @@ export class HederaController {
     return this.hederaService.getAnalytics();
   }
 
-  @Post('marketplace/list')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'List an IP-NFT for sale on the marketplace' })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'IP-NFT listed successfully'
-  })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  async listForSale(@Body() listingDto: MarketplaceListingDto) {
-    // This would integrate with the marketplace smart contract
-    return { 
-      message: 'Marketplace listing functionality will be implemented with smart contract integration',
-      data: listingDto 
-    };
-  }
-
-  @Post('marketplace/auction')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create an auction for an IP-NFT' })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'Auction created successfully'
-  })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  async createAuction(@Body() auctionDto: MarketplaceAuctionDto) {
-    // This would integrate with the marketplace smart contract
-    return { 
-      message: 'Auction functionality will be implemented with smart contract integration',
-      data: auctionDto 
-    };
-  }
-
-  @Post('escrow/create')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create an escrow agreement for RWA IP-NFT' })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'Escrow created successfully'
-  })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  async createEscrow(@Body() escrowDto: EscrowCreateDto) {
-    // This would integrate with the escrow smart contract
-    return { 
-      message: 'Escrow functionality will be implemented with smart contract integration',
-      data: escrowDto 
-    };
-  }
 
   @Post('validate-metadata')
   @HttpCode(HttpStatus.OK)

@@ -52,10 +52,6 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         EscrowStatus status;
         uint256 createdAt;
         uint256 completionDeadline;
-        VerificationRequirement[] verificationRequirements;
-        mapping(address => bool) hasVerified;
-        string[] sellerEvidence;
-        string[] buyerComments;
     }
     
     // Mapping from escrow ID to escrow agreement
@@ -66,6 +62,12 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
     
     // Authorized verifiers for third-party verification
     mapping(address => bool) public authorizedVerifiers;
+    
+    // Separate mappings for data that was in struct
+    mapping(uint256 => VerificationRequirement[]) public escrowVerificationRequirements;
+    mapping(uint256 => mapping(address => bool)) public escrowHasVerified;
+    mapping(uint256 => string[]) public escrowSellerEvidence;
+    mapping(uint256 => string[]) public escrowBuyerComments;
     
     // Escrow fee percentage (in basis points)
     uint256 public escrowFeeRate = 100; // 1%
@@ -193,7 +195,7 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         
         // Add verification requirements
         for (uint256 i = 0; i < verificationTypes.length; i++) {
-            escrow.verificationRequirements.push(VerificationRequirement({
+            escrowVerificationRequirements[escrowId].push(VerificationRequirement({
                 verificationType: verificationTypes[i],
                 description: verificationDescriptions[i],
                 expectedHash: expectedHashes[i],
@@ -219,10 +221,10 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
     ) external validEscrow(escrowId) {
         EscrowAgreement storage escrow = escrows[escrowId];
         require(msg.sender == escrow.seller, "Only seller can submit");
-        require(requirementIndex < escrow.verificationRequirements.length, "Invalid requirement");
-        require(block.timestamp <= escrow.verificationRequirements[requirementIndex].deadline, "Deadline passed");
+        require(requirementIndex < escrowVerificationRequirements[escrowId].length, "Invalid requirement");
+        require(block.timestamp <= escrowVerificationRequirements[escrowId][requirementIndex].deadline, "Deadline passed");
         
-        VerificationRequirement storage requirement = escrow.verificationRequirements[requirementIndex];
+        VerificationRequirement storage requirement = escrowVerificationRequirements[escrowId][requirementIndex];
         require(!requirement.sellerCompleted, "Already submitted");
         
         // Verify document hash if required
@@ -231,7 +233,7 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
         }
         
         requirement.sellerCompleted = true;
-        escrow.sellerEvidence.push(evidence);
+        escrowSellerEvidence[escrowId].push(evidence);
         
         emit VerificationSubmitted(escrowId, msg.sender, requirementIndex, evidence);
         
@@ -248,15 +250,15 @@ contract IPNFTEscrow is ReentrancyGuard, Ownable {
     ) external validEscrow(escrowId) {
         EscrowAgreement storage escrow = escrows[escrowId];
         require(msg.sender == escrow.buyer, "Only buyer can approve");
-        require(requirementIndex < escrow.verificationRequirements.length, "Invalid requirement");
+        require(requirementIndex < escrowVerificationRequirements[escrowId].length, "Invalid requirement");
         
-        VerificationRequirement storage requirement = escrow.verificationRequirements[requirementIndex];
+        VerificationRequirement storage requirement = escrowVerificationRequirements[escrowId][requirementIndex];
         require(requirement.sellerCompleted, "Seller hasn't submitted yet");
         require(!requirement.buyerApproved, "Already approved");
         
         requirement.buyerApproved = true;
         if (bytes(comment).length > 0) {
-            escrow.buyerComments.push(comment);
+            escrowBuyerComments[escrowId].push(comment);
         }
         
         emit VerificationApproved(escrowId, msg.sender, requirementIndex);
