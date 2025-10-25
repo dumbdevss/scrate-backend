@@ -1,46 +1,18 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ethers } from 'ethers';
-
-// Smart contract ABIs (simplified for key functions)
-const MARKETPLACE_ABI = [
-  "function listItem(address tokenContract, uint256 tokenId, uint256 price) external",
-  "function purchaseIPNFT(uint256 listingId) external payable",
-  "function buyItem(uint256 listingId) external payable",
-  "function cancelListing(uint256 listingId) external",
-  "function createAuction(address tokenContract, uint256 tokenId, uint256 startingPrice, uint256 duration) external",
-  "function placeBid(uint256 auctionId) external payable",
-  "function endAuction(uint256 auctionId) external",
-  "function cancelAuction(uint256 auctionId) external",
-  "function getListing(uint256 listingId) external view returns (tuple(uint256 listingId, address tokenContract, uint256 tokenId, address seller, uint256 price, bool active, uint256 createdAt))",
-  "function getAuction(uint256 auctionId) external view returns (tuple(uint256 auctionId, address tokenContract, uint256 tokenId, address seller, uint256 startingPrice, uint256 currentBid, address currentBidder, uint256 endTime, bool active, uint256 createdAt))",
-  "function getTotalListings() external view returns (uint256)",
-  "function getTotalAuctions() external view returns (uint256)",
-  "event ItemListed(uint256 indexed listingId, address indexed tokenContract, uint256 indexed tokenId, address seller, uint256 price)",
-  "event ItemSold(uint256 indexed listingId, address indexed tokenContract, uint256 indexed tokenId, address seller, address buyer, uint256 price)",
-  "event AuctionCreated(uint256 indexed auctionId, address indexed tokenContract, uint256 indexed tokenId, address seller, uint256 startingPrice, uint256 endTime)",
-  "event BidPlaced(uint256 indexed auctionId, address indexed bidder, uint256 bidAmount)"
-];
-
-const ESCROW_ABI = [
-  "function createEscrow(address tokenContract, uint256 tokenId, address buyer, uint256 completionDays, uint8[] verificationTypes, string[] verificationDescriptions, bytes32[] expectedHashes, uint256[] verificationDeadlines) external payable",
-  "function submitVerification(uint256 escrowId, uint256 requirementIndex, string evidence, bytes32 documentHash) external",
-  "function approveVerification(uint256 escrowId, uint256 requirementIndex, string comment) external",
-  "function completeEscrow(uint256 escrowId) external",
-  "function raiseDispute(uint256 escrowId, string reason) external",
-  "function resolveDispute(uint256 escrowId, address winner, string resolution) external",
-  "function cancelEscrow(uint256 escrowId, string reason) external",
-  "function getEscrow(uint256 escrowId) external view returns (uint256 id, address tokenContract, uint256 tokenId, address seller, address buyer, uint256 price, uint8 status, uint256 createdAt, uint256 completionDeadline)",
-  "function getTotalEscrows() external view returns (uint256)",
-  "event EscrowCreated(uint256 indexed escrowId, address indexed tokenContract, uint256 indexed tokenId, address seller, address buyer, uint256 price)",
-  "event VerificationSubmitted(uint256 indexed escrowId, address indexed submitter, uint256 requirementIndex, string evidence)",
-  "event DisputeRaised(uint256 indexed escrowId, address indexed initiator, string reason)"
-];
-
-interface ContractTransaction {
-  hash: string;
-  wait(): Promise<any>;
-}
+import {
+  Client,
+  AccountId,
+  PrivateKey,
+  ContractExecuteTransaction,
+  ContractCallQuery,
+  ContractId,
+  Hbar,
+  TransactionResponse,
+  ContractFunctionParameters,
+  TransactionReceipt,
+  Status
+} from '@hashgraph/sdk';
 
 interface MarketplaceListing {
   listingId: number;
@@ -80,44 +52,61 @@ interface EscrowDetails {
 @Injectable()
 export class SmartContractService {
   private readonly logger = new Logger(SmartContractService.name);
-  private provider: ethers.JsonRpcProvider;
-  private marketplaceContract: ethers.Contract;
-  private escrowContract: ethers.Contract;
-  private signer: ethers.Wallet;
+  private client: Client;
+  private operatorId: AccountId;
+  private operatorKey: PrivateKey;
+  private marketplaceContractId: ContractId;
+  private escrowContractId: ContractId;
 
   constructor(private configService: ConfigService) {
-    this.initializeContracts();
+    this.initializeClient();
   }
 
-  private initializeContracts() {
+  private initializeClient() {
     try {
-      // Initialize provider (you'll need to configure this for Hedera EVM)
-      const rpcUrl = this.configService.get<string>('HEDERA_RPC_URL', 'https://testnet.hashio.io/api');
-      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+      // Initialize Hedera client
+      const operatorIdStr = this.configService.get<string>('HEDERA_OPERATOR_ID');
+      const operatorKeyStr = this.configService.get<string>('HEDERA_OPERATOR_KEY');
+      const network = this.configService.get<string>('HEDERA_NETWORK', 'testnet');
 
-      // Initialize signer
-      const privateKey = this.configService.get<string>('HEDERA_OPERATOR_KEY');
-      if (!privateKey) {
-        throw new Error('HEDERA_OPERATOR_KEY not configured');
+      if (!operatorIdStr || !operatorKeyStr) {
+        throw new Error('HEDERA_OPERATOR_ID and HEDERA_OPERATOR_KEY must be configured');
       }
-      this.signer = new ethers.Wallet(privateKey, this.provider);
 
-      // Initialize contracts
+      this.operatorId = AccountId.fromString(operatorIdStr);
+      this.operatorKey = PrivateKey.fromString(operatorKeyStr);
+
+      // Initialize client based on network
+      switch (network) {
+        case 'mainnet':
+          this.client = Client.forMainnet();
+          break;
+        case 'previewnet':
+          this.client = Client.forPreviewnet();
+          break;
+        default:
+          this.client = Client.forTestnet();
+      }
+
+      this.client.setOperator(this.operatorId, this.operatorKey);
+
+      // Initialize contract IDs
       const marketplaceAddress = this.configService.get<string>('MARKETPLACE_CONTRACT_ADDRESS');
       const escrowAddress = this.configService.get<string>('ESCROW_CONTRACT_ADDRESS');
 
       if (marketplaceAddress) {
-        this.marketplaceContract = new ethers.Contract(marketplaceAddress, MARKETPLACE_ABI, this.signer);
+        this.marketplaceContractId = ContractId.fromString(marketplaceAddress);
         this.logger.log(`Marketplace contract initialized at ${marketplaceAddress}`);
       }
 
       if (escrowAddress) {
-        this.escrowContract = new ethers.Contract(escrowAddress, ESCROW_ABI, this.signer);
+        this.escrowContractId = ContractId.fromString(escrowAddress);
         this.logger.log(`Escrow contract initialized at ${escrowAddress}`);
       }
 
+      this.logger.log(`Hedera client initialized for ${network}`);
     } catch (error) {
-      this.logger.error(`Failed to initialize contracts: ${error.message}`);
+      this.logger.error(`Failed to initialize Hedera client: ${error.message}`);
     }
   }
 
@@ -125,15 +114,32 @@ export class SmartContractService {
 
   async listIPNFT(tokenContract: string, tokenId: number, price: string): Promise<string> {
     try {
-      if (!this.marketplaceContract) {
+      if (!this.marketplaceContractId) {
         throw new BadRequestException('Marketplace contract not initialized');
       }
 
-      const priceWei = ethers.parseEther(price);
-      const tx: ContractTransaction = await this.marketplaceContract.listItem(tokenContract, tokenId, priceWei);
+      const priceHbar = Hbar.fromTinybars(parseInt(price));
       
-      this.logger.log(`Listed IP-NFT ${tokenId} for ${price} ETH. Transaction: ${tx.hash}`);
-      return tx.hash;
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.marketplaceContractId)
+        .setGas(300000)
+        .setFunction(
+          'listItem',
+          new ContractFunctionParameters()
+            .addAddress(tokenContract)
+            .addUint256(tokenId)
+            .addUint256(priceHbar.toTinybars())
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
+      
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Listed IP-NFT ${tokenId} for ${price} HBAR. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to list IP-NFT: ${error.message}`);
       throw new BadRequestException(`Failed to list IP-NFT: ${error.message}`);
@@ -142,17 +148,31 @@ export class SmartContractService {
 
   async purchaseIPNFT(listingId: number, paymentAmount: string): Promise<string> {
     try {
-      if (!this.marketplaceContract) {
+      if (!this.marketplaceContractId) {
         throw new BadRequestException('Marketplace contract not initialized');
       }
 
-      const paymentWei = ethers.parseEther(paymentAmount);
-      const tx: ContractTransaction = await this.marketplaceContract.purchaseIPNFT(listingId, {
-        value: paymentWei
-      });
+      const paymentHbar = Hbar.fromTinybars(parseInt(paymentAmount));
       
-      this.logger.log(`Purchased IP-NFT listing ${listingId}. Transaction: ${tx.hash}`);
-      return tx.hash;
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.marketplaceContractId)
+        .setGas(300000)
+        .setPayableAmount(paymentHbar)
+        .setFunction(
+          'purchaseIPNFT',
+          new ContractFunctionParameters()
+            .addUint256(listingId)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
+      
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Purchased IP-NFT listing ${listingId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to purchase IP-NFT: ${error.message}`);
       throw new BadRequestException(`Failed to purchase IP-NFT: ${error.message}`);
@@ -161,14 +181,28 @@ export class SmartContractService {
 
   async cancelListing(listingId: number): Promise<string> {
     try {
-      if (!this.marketplaceContract) {
+      if (!this.marketplaceContractId) {
         throw new BadRequestException('Marketplace contract not initialized');
       }
 
-      const tx: ContractTransaction = await this.marketplaceContract.cancelListing(listingId);
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.marketplaceContractId)
+        .setGas(300000)
+        .setFunction(
+          'cancelListing',
+          new ContractFunctionParameters()
+            .addUint256(listingId)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
       
-      this.logger.log(`Cancelled listing ${listingId}. Transaction: ${tx.hash}`);
-      return tx.hash;
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Cancelled listing ${listingId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to cancel listing: ${error.message}`);
       throw new BadRequestException(`Failed to cancel listing: ${error.message}`);
@@ -177,22 +211,34 @@ export class SmartContractService {
 
   async createAuction(tokenContract: string, tokenId: number, startingPrice: string, durationHours: number): Promise<string> {
     try {
-      if (!this.marketplaceContract) {
+      if (!this.marketplaceContractId) {
         throw new BadRequestException('Marketplace contract not initialized');
       }
 
-      const startingPriceWei = ethers.parseEther(startingPrice);
-      const durationSeconds = durationHours * 3600; // Convert hours to seconds
+      const startingPriceHbar = Hbar.fromTinybars(parseInt(startingPrice));
+      const durationSeconds = durationHours * 3600;
       
-      const tx: ContractTransaction = await this.marketplaceContract.createAuction(
-        tokenContract, 
-        tokenId, 
-        startingPriceWei, 
-        durationSeconds
-      );
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.marketplaceContractId)
+        .setGas(300000)
+        .setFunction(
+          'createAuction',
+          new ContractFunctionParameters()
+            .addAddress(tokenContract)
+            .addUint256(tokenId)
+            .addUint256(startingPriceHbar.toTinybars())
+            .addUint256(durationSeconds)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
       
-      this.logger.log(`Created auction for IP-NFT ${tokenId}. Transaction: ${tx.hash}`);
-      return tx.hash;
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Created auction for IP-NFT ${tokenId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to create auction: ${error.message}`);
       throw new BadRequestException(`Failed to create auction: ${error.message}`);
@@ -201,85 +247,34 @@ export class SmartContractService {
 
   async placeBid(auctionId: number, bidAmount: string): Promise<string> {
     try {
-      if (!this.marketplaceContract) {
+      if (!this.marketplaceContractId) {
         throw new BadRequestException('Marketplace contract not initialized');
       }
 
-      const bidWei = ethers.parseEther(bidAmount);
-      const tx: ContractTransaction = await this.marketplaceContract.placeBid(auctionId, {
-        value: bidWei
-      });
+      const bidHbar = Hbar.fromTinybars(parseInt(bidAmount));
       
-      this.logger.log(`Placed bid of ${bidAmount} ETH on auction ${auctionId}. Transaction: ${tx.hash}`);
-      return tx.hash;
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.marketplaceContractId)
+        .setGas(300000)
+        .setPayableAmount(bidHbar)
+        .setFunction(
+          'placeBid',
+          new ContractFunctionParameters()
+            .addUint256(auctionId)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
+      
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Placed bid on auction ${auctionId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to place bid: ${error.message}`);
       throw new BadRequestException(`Failed to place bid: ${error.message}`);
-    }
-  }
-
-  async endAuction(auctionId: number): Promise<string> {
-    try {
-      if (!this.marketplaceContract) {
-        throw new BadRequestException('Marketplace contract not initialized');
-      }
-
-      const tx: ContractTransaction = await this.marketplaceContract.endAuction(auctionId);
-      
-      this.logger.log(`Ended auction ${auctionId}. Transaction: ${tx.hash}`);
-      return tx.hash;
-    } catch (error) {
-      this.logger.error(`Failed to end auction: ${error.message}`);
-      throw new BadRequestException(`Failed to end auction: ${error.message}`);
-    }
-  }
-
-  async getListing(listingId: number): Promise<MarketplaceListing> {
-    try {
-      if (!this.marketplaceContract) {
-        throw new BadRequestException('Marketplace contract not initialized');
-      }
-
-      const listing = await this.marketplaceContract.getListing(listingId);
-      
-      return {
-        listingId: Number(listing.listingId),
-        tokenContract: listing.tokenContract,
-        tokenId: Number(listing.tokenId),
-        seller: listing.seller,
-        price: ethers.formatEther(listing.price),
-        active: listing.active,
-        createdAt: Number(listing.createdAt)
-      };
-    } catch (error) {
-      this.logger.error(`Failed to get listing: ${error.message}`);
-      throw new BadRequestException(`Failed to get listing: ${error.message}`);
-    }
-  }
-
-  async getAuction(auctionId: number): Promise<MarketplaceAuction> {
-    try {
-      if (!this.marketplaceContract) {
-        throw new BadRequestException('Marketplace contract not initialized');
-      }
-
-      const auction = await this.marketplaceContract.getAuction(auctionId);
-      
-      return {
-        auctionId: Number(auction.auctionId),
-        tokenContract: auction.tokenContract,
-        tokenId: Number(auction.tokenId),
-        seller: auction.seller,
-        startingPrice: ethers.formatEther(auction.startingPrice),
-        currentBid: ethers.formatEther(auction.currentBid),
-        currentBidder: auction.currentBidder,
-        endTime: Number(auction.endTime),
-        active: auction.active,
-        createdAt: Number(auction.createdAt)
-      };
-    } catch (error) {
-      this.logger.error(`Failed to get auction: ${error.message}`);
-      throw new BadRequestException(`Failed to get auction: ${error.message}`);
     }
   }
 
@@ -294,73 +289,106 @@ export class SmartContractService {
     verificationDescriptions: string[],
     expectedHashes: string[],
     verificationDeadlines: number[],
-    price: string
+    escrowAmount: string
   ): Promise<string> {
     try {
-      if (!this.escrowContract) {
+      if (!this.escrowContractId) {
         throw new BadRequestException('Escrow contract not initialized');
       }
 
-      const priceWei = ethers.parseEther(price);
-      const hashesBytes32 = expectedHashes.map(hash => ethers.keccak256(ethers.toUtf8Bytes(hash)));
+      const escrowHbar = Hbar.fromTinybars(parseInt(escrowAmount));
       
-      const tx: ContractTransaction = await this.escrowContract.createEscrow(
-        tokenContract,
-        tokenId,
-        buyer,
-        completionDays,
-        verificationTypes,
-        verificationDescriptions,
-        hashesBytes32,
-        verificationDeadlines,
-        { value: priceWei }
-      );
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.escrowContractId)
+        .setGas(500000)
+        .setPayableAmount(escrowHbar)
+        .setFunction(
+          'createEscrow',
+          new ContractFunctionParameters()
+            .addAddress(tokenContract)
+            .addUint256(tokenId)
+            .addAddress(buyer)
+            .addUint256(completionDays)
+            .addUint8Array(verificationTypes)
+            .addStringArray(verificationDescriptions)
+            .addBytes32Array(expectedHashes.map(h => Buffer.from(h.replace('0x', ''), 'hex')))
+            .addUint256Array(verificationDeadlines)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
       
-      this.logger.log(`Created escrow for IP-NFT ${tokenId}. Transaction: ${tx.hash}`);
-      return tx.hash;
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Created escrow for IP-NFT ${tokenId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to create escrow: ${error.message}`);
       throw new BadRequestException(`Failed to create escrow: ${error.message}`);
     }
   }
 
-  async submitVerification(escrowId: number, requirementIndex: number, evidence: string, documentHash?: string): Promise<string> {
+  async submitVerification(escrowId: number, requirementIndex: number, evidence: string, documentHash: string): Promise<string> {
     try {
-      if (!this.escrowContract) {
+      if (!this.escrowContractId) {
         throw new BadRequestException('Escrow contract not initialized');
       }
 
-      const hashBytes32 = documentHash ? ethers.keccak256(ethers.toUtf8Bytes(documentHash)) : ethers.ZeroHash;
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.escrowContractId)
+        .setGas(300000)
+        .setFunction(
+          'submitVerification',
+          new ContractFunctionParameters()
+            .addUint256(escrowId)
+            .addUint256(requirementIndex)
+            .addString(evidence)
+            .addBytes32(Buffer.from(documentHash.replace('0x', ''), 'hex'))
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
       
-      const tx: ContractTransaction = await this.escrowContract.submitVerification(
-        escrowId,
-        requirementIndex,
-        evidence,
-        hashBytes32
-      );
-      
-      this.logger.log(`Submitted verification for escrow ${escrowId}. Transaction: ${tx.hash}`);
-      return tx.hash;
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Submitted verification for escrow ${escrowId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to submit verification: ${error.message}`);
       throw new BadRequestException(`Failed to submit verification: ${error.message}`);
     }
   }
 
-  async approveVerification(escrowId: number, requirementIndex: number, comment: string = ''): Promise<string> {
+  async approveVerification(escrowId: number, requirementIndex: number, comment: string): Promise<string> {
     try {
-      if (!this.escrowContract) {
+      if (!this.escrowContractId) {
         throw new BadRequestException('Escrow contract not initialized');
       }
 
-      const tx: ContractTransaction = await this.escrowContract.approveVerification(
-        escrowId,
-        requirementIndex,
-        comment
-      );
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.escrowContractId)
+        .setGas(300000)
+        .setFunction(
+          'approveVerification',
+          new ContractFunctionParameters()
+            .addUint256(escrowId)
+            .addUint256(requirementIndex)
+            .addString(comment)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
       
-      this.logger.log(`Approved verification for escrow ${escrowId}. Transaction: ${tx.hash}`);
-      return tx.hash;
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Approved verification for escrow ${escrowId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to approve verification: ${error.message}`);
       throw new BadRequestException(`Failed to approve verification: ${error.message}`);
@@ -369,94 +397,203 @@ export class SmartContractService {
 
   async completeEscrow(escrowId: number): Promise<string> {
     try {
-      if (!this.escrowContract) {
+      if (!this.escrowContractId) {
         throw new BadRequestException('Escrow contract not initialized');
       }
 
-      const tx: ContractTransaction = await this.escrowContract.completeEscrow(escrowId);
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.escrowContractId)
+        .setGas(300000)
+        .setFunction(
+          'completeEscrow',
+          new ContractFunctionParameters()
+            .addUint256(escrowId)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
       
-      this.logger.log(`Completed escrow ${escrowId}. Transaction: ${tx.hash}`);
-      return tx.hash;
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Completed escrow ${escrowId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to complete escrow: ${error.message}`);
       throw new BadRequestException(`Failed to complete escrow: ${error.message}`);
     }
   }
 
-  async raiseDispute(escrowId: number, reason: string): Promise<string> {
+  // Query Functions
+
+  async getListing(listingId: number): Promise<MarketplaceListing> {
     try {
-      if (!this.escrowContract) {
-        throw new BadRequestException('Escrow contract not initialized');
+      if (!this.marketplaceContractId) {
+        throw new BadRequestException('Marketplace contract not initialized');
       }
 
-      const tx: ContractTransaction = await this.escrowContract.raiseDispute(escrowId, reason);
-      
-      this.logger.log(`Raised dispute for escrow ${escrowId}. Transaction: ${tx.hash}`);
-      return tx.hash;
-    } catch (error) {
-      this.logger.error(`Failed to raise dispute: ${error.message}`);
-      throw new BadRequestException(`Failed to raise dispute: ${error.message}`);
-    }
-  }
+      const contractCallQuery = new ContractCallQuery()
+        .setContractId(this.marketplaceContractId)
+        .setGas(100000)
+        .setFunction(
+          'getListing',
+          new ContractFunctionParameters()
+            .addUint256(listingId)
+        );
 
-  async resolveDispute(escrowId: number, winner: string, resolution: string): Promise<string> {
-    try {
-      if (!this.escrowContract) {
-        throw new BadRequestException('Escrow contract not initialized');
-      }
-
-      const tx: ContractTransaction = await this.escrowContract.resolveDispute(escrowId, winner, resolution);
+      const result = await contractCallQuery.execute(this.client);
       
-      this.logger.log(`Resolved dispute for escrow ${escrowId}. Transaction: ${tx.hash}`);
-      return tx.hash;
+      // Parse the result based on the expected return structure
+      // This is a simplified example - you'll need to properly decode the result
+      const listing: MarketplaceListing = {
+        listingId: listingId,
+        tokenContract: result.getString(0),
+        tokenId: result.getUint256(1).toNumber(),
+        seller: result.getString(2),
+        price: result.getUint256(3).toString(),
+        active: result.getBool(4),
+        createdAt: result.getUint256(5).toNumber()
+      };
+
+      return listing;
     } catch (error) {
-      this.logger.error(`Failed to resolve dispute: ${error.message}`);
-      throw new BadRequestException(`Failed to resolve dispute: ${error.message}`);
+      this.logger.error(`Failed to get listing: ${error.message}`);
+      throw new BadRequestException(`Failed to get listing: ${error.message}`);
     }
   }
 
   async getEscrow(escrowId: number): Promise<EscrowDetails> {
     try {
-      if (!this.escrowContract) {
+      if (!this.escrowContractId) {
         throw new BadRequestException('Escrow contract not initialized');
       }
 
-      const escrow = await this.escrowContract.getEscrow(escrowId);
+      const contractCallQuery = new ContractCallQuery()
+        .setContractId(this.escrowContractId)
+        .setGas(100000)
+        .setFunction(
+          'getEscrow',
+          new ContractFunctionParameters()
+            .addUint256(escrowId)
+        );
+
+      const result = await contractCallQuery.execute(this.client);
       
-      return {
-        id: Number(escrow.id),
-        tokenContract: escrow.tokenContract,
-        tokenId: Number(escrow.tokenId),
-        seller: escrow.seller,
-        buyer: escrow.buyer,
-        price: ethers.formatEther(escrow.price),
-        status: Number(escrow.status),
-        createdAt: Number(escrow.createdAt),
-        completionDeadline: Number(escrow.completionDeadline)
+      // Parse the result based on the expected return structure
+      const escrow: EscrowDetails = {
+        id: escrowId,
+        tokenContract: result.getString(0),
+        tokenId: result.getUint256(1).toNumber(),
+        seller: result.getString(2),
+        buyer: result.getString(3),
+        price: result.getUint256(4).toString(),
+        status: result.getUint8(5),
+        createdAt: result.getUint256(6).toNumber(),
+        completionDeadline: result.getUint256(7).toNumber()
       };
+
+      return escrow;
     } catch (error) {
       this.logger.error(`Failed to get escrow: ${error.message}`);
       throw new BadRequestException(`Failed to get escrow: ${error.message}`);
     }
   }
 
-  // Utility Functions
+  // Additional methods needed by controllers
 
-  async getMarketplaceStats(): Promise<{ totalListings: number; totalAuctions: number }> {
+  async getAuction(auctionId: number): Promise<MarketplaceAuction> {
     try {
-      if (!this.marketplaceContract) {
+      if (!this.marketplaceContractId) {
         throw new BadRequestException('Marketplace contract not initialized');
       }
 
-      const [totalListings, totalAuctions] = await Promise.all([
-        this.marketplaceContract.getTotalListings(),
-        this.marketplaceContract.getTotalAuctions()
-      ]);
+      const contractCallQuery = new ContractCallQuery()
+        .setContractId(this.marketplaceContractId)
+        .setGas(100000)
+        .setFunction(
+          'getAuction',
+          new ContractFunctionParameters()
+            .addUint256(auctionId)
+        );
 
-      return {
-        totalListings: Number(totalListings),
-        totalAuctions: Number(totalAuctions)
+      const result = await contractCallQuery.execute(this.client);
+      
+      const auction: MarketplaceAuction = {
+        auctionId: auctionId,
+        tokenContract: result.getString(0),
+        tokenId: result.getUint256(1).toNumber(),
+        seller: result.getString(2),
+        startingPrice: result.getUint256(3).toString(),
+        currentBid: result.getUint256(4).toString(),
+        currentBidder: result.getString(5),
+        endTime: result.getUint256(6).toNumber(),
+        active: result.getBool(7),
+        createdAt: result.getUint256(8).toNumber()
       };
+
+      return auction;
+    } catch (error) {
+      this.logger.error(`Failed to get auction: ${error.message}`);
+      throw new BadRequestException(`Failed to get auction: ${error.message}`);
+    }
+  }
+
+  async endAuction(auctionId: number): Promise<string> {
+    try {
+      if (!this.marketplaceContractId) {
+        throw new BadRequestException('Marketplace contract not initialized');
+      }
+
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.marketplaceContractId)
+        .setGas(300000)
+        .setFunction(
+          'endAuction',
+          new ContractFunctionParameters()
+            .addUint256(auctionId)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
+      
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Ended auction ${auctionId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
+    } catch (error) {
+      this.logger.error(`Failed to end auction: ${error.message}`);
+      throw new BadRequestException(`Failed to end auction: ${error.message}`);
+    }
+  }
+
+  async getMarketplaceStats(): Promise<{ totalListings: number; totalAuctions: number }> {
+    try {
+      if (!this.marketplaceContractId) {
+        throw new BadRequestException('Marketplace contract not initialized');
+      }
+
+      // Get total listings
+      const listingsQuery = new ContractCallQuery()
+        .setContractId(this.marketplaceContractId)
+        .setGas(100000)
+        .setFunction('getTotalListings');
+
+      const listingsResult = await listingsQuery.execute(this.client);
+      const totalListings = listingsResult.getUint256(0).toNumber();
+
+      // Get total auctions
+      const auctionsQuery = new ContractCallQuery()
+        .setContractId(this.marketplaceContractId)
+        .setGas(100000)
+        .setFunction('getTotalAuctions');
+
+      const auctionsResult = await auctionsQuery.execute(this.client);
+      const totalAuctions = auctionsResult.getUint256(0).toNumber();
+
+      return { totalListings, totalAuctions };
     } catch (error) {
       this.logger.error(`Failed to get marketplace stats: ${error.message}`);
       throw new BadRequestException(`Failed to get marketplace stats: ${error.message}`);
@@ -465,15 +602,83 @@ export class SmartContractService {
 
   async getTotalEscrows(): Promise<number> {
     try {
-      if (!this.escrowContract) {
+      if (!this.escrowContractId) {
         throw new BadRequestException('Escrow contract not initialized');
       }
 
-      const total = await this.escrowContract.getTotalEscrows();
-      return Number(total);
+      const contractCallQuery = new ContractCallQuery()
+        .setContractId(this.escrowContractId)
+        .setGas(100000)
+        .setFunction('getTotalEscrows');
+
+      const result = await contractCallQuery.execute(this.client);
+      return result.getUint256(0).toNumber();
     } catch (error) {
       this.logger.error(`Failed to get total escrows: ${error.message}`);
       throw new BadRequestException(`Failed to get total escrows: ${error.message}`);
+    }
+  }
+
+  async raiseDispute(escrowId: number, reason: string): Promise<string> {
+    try {
+      if (!this.escrowContractId) {
+        throw new BadRequestException('Escrow contract not initialized');
+      }
+
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.escrowContractId)
+        .setGas(300000)
+        .setFunction(
+          'raiseDispute',
+          new ContractFunctionParameters()
+            .addUint256(escrowId)
+            .addString(reason)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
+      
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Raised dispute for escrow ${escrowId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
+    } catch (error) {
+      this.logger.error(`Failed to raise dispute: ${error.message}`);
+      throw new BadRequestException(`Failed to raise dispute: ${error.message}`);
+    }
+  }
+
+  async resolveDispute(escrowId: number, winner: string, resolution: string): Promise<string> {
+    try {
+      if (!this.escrowContractId) {
+        throw new BadRequestException('Escrow contract not initialized');
+      }
+
+      const contractExecuteTx = new ContractExecuteTransaction()
+        .setContractId(this.escrowContractId)
+        .setGas(300000)
+        .setFunction(
+          'resolveDispute',
+          new ContractFunctionParameters()
+            .addUint256(escrowId)
+            .addAddress(winner)
+            .addString(resolution)
+        );
+
+      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
+      
+      if (receipt.status !== Status.Success) {
+        throw new Error(`Transaction failed with status: ${receipt.status}`);
+      }
+
+      this.logger.log(`Resolved dispute for escrow ${escrowId}. Transaction: ${txResponse.transactionId}`);
+      return txResponse.transactionId.toString();
+    } catch (error) {
+      this.logger.error(`Failed to resolve dispute: ${error.message}`);
+      throw new BadRequestException(`Failed to resolve dispute: ${error.message}`);
     }
   }
 }

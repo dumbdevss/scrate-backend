@@ -1,10 +1,10 @@
- import { IsString, IsNumber, IsArray, IsOptional, IsEthereumAddress, Min, Max } from 'class-validator';
+import { IsString, IsNumber, IsArray, IsOptional, Min, Max } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 // Marketplace DTOs
 export class ListIPNFTDto {
-  @ApiProperty({ description: 'Token contract address' })
-  @IsEthereumAddress()
+  @ApiProperty({ description: 'Token contract address (Hedera Contract ID)' })
+  @IsString()
   tokenContract: string;
 
   @ApiProperty({ description: 'Token ID' })
@@ -12,7 +12,7 @@ export class ListIPNFTDto {
   @Min(1)
   tokenId: number;
 
-  @ApiProperty({ description: 'Price in ETH' })
+  @ApiProperty({ description: 'Price in HBAR (tinybars)' })
   @IsString()
   price: string;
 }
@@ -23,14 +23,14 @@ export class PurchaseIPNFTDto {
   @Min(1)
   listingId: number;
 
-  @ApiProperty({ description: 'Payment amount in ETH' })
+  @ApiProperty({ description: 'Payment amount in HBAR (tinybars)' })
   @IsString()
   paymentAmount: string;
 }
 
 export class CreateAuctionDto {
-  @ApiProperty({ description: 'Token contract address' })
-  @IsEthereumAddress()
+  @ApiProperty({ description: 'Token contract address (Hedera Contract ID)' })
+  @IsString()
   tokenContract: string;
 
   @ApiProperty({ description: 'Token ID' })
@@ -38,7 +38,7 @@ export class CreateAuctionDto {
   @Min(1)
   tokenId: number;
 
-  @ApiProperty({ description: 'Starting price in ETH' })
+  @ApiProperty({ description: 'Starting price in HBAR (tinybars)' })
   @IsString()
   startingPrice: string;
 
@@ -55,15 +55,15 @@ export class PlaceBidDto {
   @Min(1)
   auctionId: number;
 
-  @ApiProperty({ description: 'Bid amount in ETH' })
+  @ApiProperty({ description: 'Bid amount in HBAR (tinybars)' })
   @IsString()
   bidAmount: string;
 }
 
 // Escrow DTOs
 export class CreateEscrowDto {
-  @ApiProperty({ description: 'Token contract address' })
-  @IsEthereumAddress()
+  @ApiProperty({ description: 'Token contract address (Hedera Contract ID)' })
+  @IsString()
   tokenContract: string;
 
   @ApiProperty({ description: 'Token ID' })
@@ -71,8 +71,8 @@ export class CreateEscrowDto {
   @Min(1)
   tokenId: number;
 
-  @ApiProperty({ description: 'Buyer address' })
-  @IsEthereumAddress()
+  @ApiProperty({ description: 'Buyer address (Hedera Account ID)' })
+  @IsString()
   buyer: string;
 
   @ApiProperty({ description: 'Completion period in days' })
@@ -101,7 +101,7 @@ export class CreateEscrowDto {
   @IsNumber({}, { each: true })
   verificationDeadlines: number[];
 
-  @ApiProperty({ description: 'Price in ETH' })
+  @ApiProperty({ description: 'Price in HBAR (tinybars)' })
   @IsString()
   price: string;
 }
@@ -161,8 +161,8 @@ export class ResolveDisputeDto {
   @Min(1)
   escrowId: number;
 
-  @ApiProperty({ description: 'Winner address' })
-  @IsEthereumAddress()
+  @ApiProperty({ description: 'Winner address (Hedera Account ID)' })
+  @IsString()
   winner: string;
 
   @ApiProperty({ description: 'Resolution description' })
@@ -192,7 +192,7 @@ export class MarketplaceListingDto {
   @ApiProperty({ description: 'Seller address' })
   seller: string;
 
-  @ApiProperty({ description: 'Price in ETH' })
+  @ApiProperty({ description: 'Price in HBAR (tinybars)' })
   price: string;
 
   @ApiProperty({ description: 'Is listing active' })
@@ -215,10 +215,10 @@ export class MarketplaceAuctionDto {
   @ApiProperty({ description: 'Seller address' })
   seller: string;
 
-  @ApiProperty({ description: 'Starting price in ETH' })
+  @ApiProperty({ description: 'Starting price in HBAR (tinybars)' })
   startingPrice: string;
 
-  @ApiProperty({ description: 'Current bid in ETH' })
+  @ApiProperty({ description: 'Current bid in HBAR (tinybars)' })
   currentBid: string;
 
   @ApiProperty({ description: 'Current bidder address' })
@@ -250,7 +250,7 @@ export class EscrowDetailsDto {
   @ApiProperty({ description: 'Buyer address' })
   buyer: string;
 
-  @ApiProperty({ description: 'Price in ETH' })
+  @ApiProperty({ description: 'Price in HBAR (tinybars)' })
   price: string;
 
   @ApiProperty({ description: 'Escrow status (0=Active, 1=SellerVerified, 2=BuyerVerified, 3=BothVerified, 4=Completed, 5=Disputed, 6=Cancelled, 7=Refunded)' })
