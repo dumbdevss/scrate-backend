@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PinataSDK } from "pinata";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   Client,
@@ -55,11 +56,13 @@ export class HederaService {
   private operatorId: AccountId;
   private operatorKey: PrivateKey;
   private supabase: SupabaseClient;
+  private pinata: PinataSDK;
   private ipnftCollectionId: string;
 
   constructor(private configService: ConfigService) {
     this.initializeClient();
     this.initializeSupabase();
+    this.initializePinata();
   }
 
   private initializeClient() {
@@ -112,6 +115,15 @@ export class HederaService {
     }
   }
 
+  private initializePinata() {
+    const pinata = new PinataSDK({
+      pinataJwt: process.env.PINATA_JWT!,
+      pinataGateway: "violet-patient-squid-248.mypinata.cloud",
+    });
+
+    this.pinata = pinata;
+  }
+
   async createIPNFTCollection(): Promise<CollectionInfo> {
     try {
       this.logger.log('Creating IP-NFT collection');
@@ -154,6 +166,7 @@ export class HederaService {
         name: 'Intellectual Property NFTs',
         symbol: 'IPNFT',
         created_at: new Date().toISOString(),
+        treasury_account: collectionInfo.treasuryAccountId
       });
 
       if (error) {
@@ -168,6 +181,27 @@ export class HederaService {
     } catch (error) {
       this.logger.error(`Failed to create IP-NFT collection: ${error.message}`, error.stack);
       throw new BadRequestException(`Failed to create IP-NFT collection: ${error.message}`);
+    }
+  }
+
+  async uploadNFTMetadata(metadata: Record<string, any>) {
+    try {
+      // Upload metadata JSON
+      console.log("Uploading metadata:", metadata);
+      const file = new File([JSON.stringify(metadata)], "metadata.json", {
+        type: "application/json",
+      });
+
+      const upload: any = await this.pinata.upload.public.file(file);
+      console.log("✅ Metadata uploaded:", upload);
+
+      const ipfsUri = `ipfs://${upload.cid}`;
+      console.log("✅ Metadata uploaded:", ipfsUri);
+
+      return ipfsUri;
+    } catch (error) {
+      console.error("❌ Failed to upload metadata:", error);
+      throw error;
     }
   }
 
@@ -203,14 +237,17 @@ export class HederaService {
         },
       };
 
-      const metadataBytes = Buffer.from(JSON.stringify(metadata));
+      const metadataUrl = await this.uploadNFTMetadata(metadata);
+      console.log("✅ Metadata uploaded:", metadataUrl);
 
       const mintTx = new TokenMintTransaction()
-        .setTokenId(tokenId)
-        .setMetadata([metadataBytes])
+        .setTokenId(this.ipnftCollectionId)
+        .addMetadata(Buffer.from(metadataUrl))
         .setMaxTransactionFee(new Hbar(20));
 
-      const mintTxSubmit = await mintTx.execute(this.client);
+      const signTxMint = await mintTx.freezeWith(this.client).sign(this.operatorKey);
+
+      const mintTxSubmit = await signTxMint.execute(this.client);
       const mintRx = await mintTxSubmit.getReceipt(this.client);
       const serialNumbers = mintRx.serials;
 
