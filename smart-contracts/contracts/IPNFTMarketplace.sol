@@ -3,14 +3,16 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {HederaTokenService} from "@hashgraph/smart-contracts/contracts/system-contracts/hedera-token-service/HederaTokenService.sol";
+import {IHederaTokenService} from "@hashgraph/smart-contracts/contracts/system-contracts/hedera-token-service/IHederaTokenService.sol";
+import {HederaResponseCodes} from "@hashgraph/smart-contracts/contracts/system-contracts/HederaResponseCodes.sol";
+import {KeyHelper} from "@hashgraph/smart-contracts/contracts/system-contracts/hedera-token-service/KeyHelper.sol";
 
 /**
  * @title IPNFTMarketplace
  * @dev Marketplace contract for trading IP-NFTs with auction and direct sale functionality
  */
-contract IPNFTMarketplace is ReentrancyGuard, Ownable {
+contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard  {
     
     uint256 private _listingIds;
     uint256 private _auctionIds;
@@ -19,10 +21,12 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
     uint256 public platformFee = 250;
     uint256 public constant MAX_PLATFORM_FEE = 1000; // 10% max
     
+    IHederaTokenService internal constant hederaService = IHederaTokenService(address(0x167));
+    
     struct Listing {
         uint256 listingId;
-        address tokenContract;
-        uint256 tokenId;
+        address tokenAddress;
+        int64 serialNumber;
         address seller;
         uint256 price;
         bool active;
@@ -31,8 +35,8 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
     
     struct Auction {
         uint256 auctionId;
-        address tokenContract;
-        uint256 tokenId;
+        address tokenAddress;
+        int64 serialNumber;
         address seller;
         uint256 startingPrice;
         uint256 currentBid;
@@ -48,25 +52,25 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
     // Mapping from auction ID to auction details
     mapping(uint256 => Auction) public auctions;
     
-    // Mapping from token contract + token ID to listing ID
-    mapping(address => mapping(uint256 => uint256)) public tokenToListing;
+    // Mapping from token address + serial number to listing ID
+    mapping(address => mapping(int64 => uint256)) public tokenToListing;
     
-    // Mapping from token contract + token ID to auction ID
-    mapping(address => mapping(uint256 => uint256)) public tokenToAuction;
+    // Mapping from token address + serial number to auction ID
+    mapping(address => mapping(int64 => uint256)) public tokenToAuction;
     
     // Events
     event ItemListed(
         uint256 indexed listingId,
-        address indexed tokenContract,
-        uint256 indexed tokenId,
+        address indexed tokenAddress,
+        int64 indexed serialNumber,
         address seller,
         uint256 price
     );
     
     event ItemSold(
         uint256 indexed listingId,
-        address indexed tokenContract,
-        uint256 indexed tokenId,
+        address indexed tokenAddress,
+        int64 indexed serialNumber,
         address seller,
         address buyer,
         uint256 price
@@ -74,14 +78,14 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
     
     event ListingCancelled(
         uint256 indexed listingId,
-        address indexed tokenContract,
-        uint256 indexed tokenId
+        address indexed tokenAddress,
+        int64 indexed serialNumber
     );
     
     event AuctionCreated(
         uint256 indexed auctionId,
-        address indexed tokenContract,
-        uint256 indexed tokenId,
+        address indexed tokenAddress,
+        int64 indexed serialNumber,
         address seller,
         uint256 startingPrice,
         uint256 endTime
@@ -101,15 +105,15 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
     
     event AuctionCancelled(
         uint256 indexed auctionId,
-        address indexed tokenContract,
-        uint256 indexed tokenId
+        address indexed tokenAddress,
+        int64 indexed serialNumber
     );
     
-    modifier onlyTokenOwner(address tokenContract, uint256 tokenId) {
-        require(
-            IERC721(tokenContract).ownerOf(tokenId) == msg.sender,
-            "Not token owner"
-        );
+    modifier onlyTokenOwner(address tokenAddress, int64 serialNumber) {
+        (int responseCode, IHederaTokenService.NonFungibleTokenInfo memory info) = 
+            hederaService.getNonFungibleTokenInfo(tokenAddress, serialNumber);
+        require(responseCode == HederaResponseCodes.SUCCESS, "Failed to get NFT info");
+        require(info.ownerId == msg.sender, "Not token owner");
         _;
     }
     
@@ -130,33 +134,34 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
      * @dev List an IP-NFT for direct sale
      */
     function listItem(
-        address tokenContract,
-        uint256 tokenId,
+        address tokenAddress,
+        int64 serialNumber,
         uint256 price
-    ) external onlyTokenOwner(tokenContract, tokenId) nonReentrant {
+    ) external onlyTokenOwner(tokenAddress, serialNumber) nonReentrant {
         require(price > 0, "Price must be greater than 0");
-        require(tokenToListing[tokenContract][tokenId] == 0, "Already listed");
-        require(tokenToAuction[tokenContract][tokenId] == 0, "Already in auction");
+        require(tokenToListing[tokenAddress][serialNumber] == 0, "Already listed");
+        require(tokenToAuction[tokenAddress][serialNumber] == 0, "Already in auction");
         
         // Transfer token to marketplace
-        IERC721(tokenContract).transferFrom(msg.sender, address(this), tokenId);
+        int response = hederaService.transferNFT(tokenAddress, msg.sender, address(this), serialNumber);
+        require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
         
         _listingIds++;
         uint256 listingId = _listingIds;
         
         listings[listingId] = Listing({
             listingId: listingId,
-            tokenContract: tokenContract,
-            tokenId: tokenId,
+            tokenAddress: tokenAddress,
+            serialNumber: serialNumber,
             seller: msg.sender,
             price: price,
             active: true,
             createdAt: block.timestamp
         });
         
-        tokenToListing[tokenContract][tokenId] = listingId;
+        tokenToListing[tokenAddress][serialNumber] = listingId;
         
-        emit ItemListed(listingId, tokenContract, tokenId, msg.sender, price);
+        emit ItemListed(listingId, tokenAddress, serialNumber, msg.sender, price);
     }
     
     /**
@@ -173,18 +178,20 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         require(msg.sender != listing.seller, "Cannot buy own item");
         
         listing.active = false;
-        tokenToListing[listing.tokenContract][listing.tokenId] = 0;
+        tokenToListing[listing.tokenAddress][listing.serialNumber] = 0;
         
         // Calculate platform fee
         uint256 fee = (listing.price * platformFee) / 10000;
         uint256 sellerAmount = listing.price - fee;
         
         // Transfer token to buyer
-        IERC721(listing.tokenContract).transferFrom(
+        int response = hederaService.transferNFT(
+            listing.tokenAddress,
             address(this),
             msg.sender,
-            listing.tokenId
+            listing.serialNumber
         );
+        require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
         
         // Transfer payments
         payable(listing.seller).transfer(sellerAmount);
@@ -199,8 +206,8 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         
         emit ItemSold(
             listingId,
-            listing.tokenContract,
-            listing.tokenId,
+            listing.tokenAddress,
+            listing.serialNumber,
             listing.seller,
             msg.sender,
             listing.price
@@ -221,18 +228,20 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         require(msg.sender != listing.seller, "Cannot purchase own item");
         
         listing.active = false;
-        tokenToListing[listing.tokenContract][listing.tokenId] = 0;
+        tokenToListing[listing.tokenAddress][listing.serialNumber] = 0;
         
         // Calculate platform fee
         uint256 fee = (listing.price * platformFee) / 10000;
         uint256 sellerAmount = listing.price - fee;
         
         // Transfer token to buyer
-        IERC721(listing.tokenContract).transferFrom(
+        int response = hederaService.transferNFT(
+            listing.tokenAddress,
             address(this),
             msg.sender,
-            listing.tokenId
+            listing.serialNumber
         );
+        require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
         
         // Transfer payments
         payable(listing.seller).transfer(sellerAmount);
@@ -247,8 +256,8 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         
         emit ItemSold(
             listingId,
-            listing.tokenContract,
-            listing.tokenId,
+            listing.tokenAddress,
+            listing.serialNumber,
             listing.seller,
             msg.sender,
             listing.price
@@ -267,43 +276,46 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         require(msg.sender == listing.seller, "Not seller");
         
         listing.active = false;
-        tokenToListing[listing.tokenContract][listing.tokenId] = 0;
+        tokenToListing[listing.tokenAddress][listing.serialNumber] = 0;
         
         // Return token to seller
-        IERC721(listing.tokenContract).transferFrom(
+        int response = hederaService.transferNFT(
+            listing.tokenAddress,
             address(this),
             listing.seller,
-            listing.tokenId
+            listing.serialNumber
         );
+        require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
         
-        emit ListingCancelled(listingId, listing.tokenContract, listing.tokenId);
+        emit ListingCancelled(listingId, listing.tokenAddress, listing.serialNumber);
     }
     
     /**
      * @dev Create an auction for an IP-NFT
      */
     function createAuction(
-        address tokenContract,
-        uint256 tokenId,
+        address tokenAddress,
+        int64 serialNumber,
         uint256 startingPrice,
         uint256 duration
-    ) external onlyTokenOwner(tokenContract, tokenId) nonReentrant {
+    ) external onlyTokenOwner(tokenAddress, serialNumber) nonReentrant {
         require(startingPrice > 0, "Starting price must be greater than 0");
         require(duration >= 1 hours, "Duration must be at least 1 hour");
         require(duration <= 30 days, "Duration cannot exceed 30 days");
-        require(tokenToListing[tokenContract][tokenId] == 0, "Already listed");
-        require(tokenToAuction[tokenContract][tokenId] == 0, "Already in auction");
+        require(tokenToListing[tokenAddress][serialNumber] == 0, "Already listed");
+        require(tokenToAuction[tokenAddress][serialNumber] == 0, "Already in auction");
         
         // Transfer token to marketplace
-        IERC721(tokenContract).transferFrom(msg.sender, address(this), tokenId);
+        int response = hederaService.transferNFT(tokenAddress, msg.sender, address(this), serialNumber);
+        require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
         
         _auctionIds++;
         uint256 auctionId = _auctionIds;
         
         auctions[auctionId] = Auction({
             auctionId: auctionId,
-            tokenContract: tokenContract,
-            tokenId: tokenId,
+            tokenAddress: tokenAddress,
+            serialNumber: serialNumber,
             seller: msg.sender,
             startingPrice: startingPrice,
             currentBid: 0,
@@ -313,12 +325,12 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
             createdAt: block.timestamp
         });
         
-        tokenToAuction[tokenContract][tokenId] = auctionId;
+        tokenToAuction[tokenAddress][serialNumber] = auctionId;
         
         emit AuctionCreated(
             auctionId,
-            tokenContract,
-            tokenId,
+            tokenAddress,
+            serialNumber,
             msg.sender,
             startingPrice,
             block.timestamp + duration
@@ -368,7 +380,7 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         require(block.timestamp >= auction.endTime, "Auction not ended");
         
         auction.active = false;
-        tokenToAuction[auction.tokenContract][auction.tokenId] = 0;
+        tokenToAuction[auction.tokenAddress][auction.serialNumber] = 0;
         
         if (auction.currentBidder != address(0)) {
             // Calculate platform fee
@@ -376,11 +388,13 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
             uint256 sellerAmount = auction.currentBid - fee;
             
             // Transfer token to winner
-            IERC721(auction.tokenContract).transferFrom(
+            int response = hederaService.transferNFT(
+                auction.tokenAddress,
                 address(this),
                 auction.currentBidder,
-                auction.tokenId
+                auction.serialNumber
             );
+            require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
             
             // Transfer payments
             payable(auction.seller).transfer(sellerAmount);
@@ -391,13 +405,15 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
             emit AuctionEnded(auctionId, auction.currentBidder, auction.currentBid);
         } else {
             // No bids, return token to seller
-            IERC721(auction.tokenContract).transferFrom(
+            int response = hederaService.transferNFT(
+                auction.tokenAddress,
                 address(this),
                 auction.seller,
-                auction.tokenId
+                auction.serialNumber
             );
+            require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
             
-            emit AuctionCancelled(auctionId, auction.tokenContract, auction.tokenId);
+            emit AuctionCancelled(auctionId, auction.tokenAddress, auction.serialNumber);
         }
     }
     
@@ -411,16 +427,18 @@ contract IPNFTMarketplace is ReentrancyGuard, Ownable {
         require(auction.currentBidder == address(0), "Cannot cancel with bids");
         
         auction.active = false;
-        tokenToAuction[auction.tokenContract][auction.tokenId] = 0;
+        tokenToAuction[auction.tokenAddress][auction.serialNumber] = 0;
         
         // Return token to seller
-        IERC721(auction.tokenContract).transferFrom(
+        int response = hederaService.transferNFT(
+            auction.tokenAddress,
             address(this),
             auction.seller,
-            auction.tokenId
+            auction.serialNumber
         );
+        require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
         
-        emit AuctionCancelled(auctionId, auction.tokenContract, auction.tokenId);
+        emit AuctionCancelled(auctionId, auction.tokenAddress, auction.serialNumber);
     }
     
     /**
