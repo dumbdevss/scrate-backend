@@ -256,13 +256,37 @@ export class HederaService {
       }
 
       // Transfer to recipient if different from operator
-      if (recipientId.toString() !== this.operatorId.toString()) {
-        const transferTx = new TransferTransaction()
-          .addNftTransfer(tokenId, serialNumbers[0], this.operatorId, recipientId)
-          .setMaxTransactionFee(new Hbar(10));
+      // if (recipientId.toString() !== this.operatorId.toString()) {
 
-        await transferTx.execute(this.client);
-      }
+      //   // Create the associate transaction and sign with Alice's key 
+      //   const associateAliceTx = new TokenAssociateTransaction()
+      //     .setAccountId(recipientId)
+      //     .setTokenIds([this.ipnftCollectionId])
+      //     .freezeWith(this.client)
+
+      //   const signTxAssociateAlice = await associateAliceTx.sign(this.operatorKey);
+
+      //   // Submit the transaction to a Hedera network
+      //   const associateAliceTxSubmit = await signTxAssociateAlice.execute(this.client);
+
+      //   // Get the transaction receipt
+      //   const associateAliceRx = await associateAliceTxSubmit.getReceipt(this.client);
+
+      //   console.log("✅ Associate transaction submitted:", associateAliceRx);
+
+      //   const transferTx = new TransferTransaction()
+      //     .addNftTransfer(this.ipnftCollectionId, serialNumbers[0], this.operatorId, recipientId)
+      //     .freezeWith(this.client)
+
+      //   let signTxTransfer = await transferTx.sign(this.operatorKey);
+
+      //   console.log("✅ Transfer transaction created:", transferTx);
+
+      //   let transferTxSubmit = await signTxTransfer.execute(this.client);
+      //   let transferRx = await transferTxSubmit.getReceipt(this.client);
+
+      //   console.log("✅ Transfer transaction submitted:", transferRx);
+      // }
 
       const serialNumber = serialNumbers[0].toNumber();
       this.logger.log(`IP-NFT minted with serial number: ${serialNumber}`);
@@ -299,7 +323,7 @@ export class HederaService {
         tokenId: this.ipnftCollectionId,
         serialNumber: serialNumber,
         accountId: mintDto.recipient,
-        metadata: JSON.stringify(metadata),
+        metadata: metadata,
         createdTimestamp: new Date().toISOString(),
       };
 
@@ -323,19 +347,15 @@ export class HederaService {
         throw new BadRequestException('IP-NFT collection not initialized');
       }
 
-      const tokenId = AccountId.fromString(this.ipnftCollectionId);
-      const nftId = new NftId(tokenId, serialNumber);
-
-      const nftInfo = await new TokenNftInfoQuery()
-        .setNftId(nftId)
-        .execute(this.client);
+      const nftInfo = await fetch(`https://testnet.mirrornode.hedera.com/api/v1/tokens/${this.ipnftCollectionId}/nfts/${serialNumber}`)
+        .then(response => response.json());
 
       return {
         tokenId: this.ipnftCollectionId,
         serialNumber: serialNumber,
-        accountId: nftInfo[0]?.accountId?.toString() || '',
-        metadata: Buffer.from(nftInfo[0]?.metadata || []).toString(),
-        createdTimestamp: nftInfo[0]?.creationTime?.toDate().toISOString() || '',
+        accountId: nftInfo.account_id,
+        metadata: Buffer.from(nftInfo.metadata || []).toString(),
+        createdTimestamp: nftInfo.created_timestamp,
       };
     } catch (error) {
       this.logger.error(`Failed to get IP-NFT info: ${error.message}`, error.stack);

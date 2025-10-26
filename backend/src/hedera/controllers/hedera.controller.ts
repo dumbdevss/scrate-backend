@@ -11,7 +11,7 @@ import {
 import { CollectionInfo, MintResult, NftInfo } from '../interfaces/hedera.interface';
 
 @ApiTags('IP-NFT System')
-@Controller('ipnft')
+@Controller('api/ipnft')
 export class HederaController {
   constructor(private readonly hederaService: HederaService) {}
 

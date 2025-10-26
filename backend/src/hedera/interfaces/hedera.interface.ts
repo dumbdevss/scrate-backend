@@ -18,7 +18,7 @@ export interface NftInfo {
   tokenId: string;
   serialNumber: number;
   accountId: string;
-  metadata: string;
+  metadata: any;
   createdTimestamp: string;
 }
 
