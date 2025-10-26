@@ -3,14 +3,14 @@ import { ApiProperty } from '@nestjs/swagger';
 
 // Marketplace DTOs
 export class ListIPNFTDto {
-  @ApiProperty({ description: 'Token contract address (Hedera Contract ID)' })
+  @ApiProperty({ description: 'Hedera Token ID (shard.realm.num format)' })
   @IsString()
-  tokenContract: string;
+  tokenAddress: string;
 
-  @ApiProperty({ description: 'Token ID' })
+  @ApiProperty({ description: 'NFT serial number' })
   @IsNumber()
   @Min(1)
-  tokenId: number;
+  serialNumber: number;
 
   @ApiProperty({ description: 'Price in HBAR (tinybars)' })
   @IsString()
@@ -29,14 +29,14 @@ export class PurchaseIPNFTDto {
 }
 
 export class CreateAuctionDto {
-  @ApiProperty({ description: 'Token contract address (Hedera Contract ID)' })
+  @ApiProperty({ description: 'Hedera Token ID (shard.realm.num format)' })
   @IsString()
-  tokenContract: string;
+  tokenAddress: string;
 
-  @ApiProperty({ description: 'Token ID' })
+  @ApiProperty({ description: 'NFT serial number' })
   @IsNumber()
   @Min(1)
-  tokenId: number;
+  serialNumber: number;
 
   @ApiProperty({ description: 'Starting price in HBAR (tinybars)' })
   @IsString()
@@ -62,14 +62,14 @@ export class PlaceBidDto {
 
 // Escrow DTOs
 export class CreateEscrowDto {
-  @ApiProperty({ description: 'Token contract address (Hedera Contract ID)' })
+  @ApiProperty({ description: 'Hedera Token ID (shard.realm.num format)' })
   @IsString()
-  tokenContract: string;
+  tokenAddress: string;
 
-  @ApiProperty({ description: 'Token ID' })
+  @ApiProperty({ description: 'NFT serial number' })
   @IsNumber()
   @Min(1)
-  tokenId: number;
+  serialNumber: number;
 
   @ApiProperty({ description: 'Buyer address (Hedera Account ID)' })
   @IsString()
@@ -183,11 +183,11 @@ export class MarketplaceListingDto {
   @ApiProperty({ description: 'Listing ID' })
   listingId: number;
 
-  @ApiProperty({ description: 'Token contract address' })
-  tokenContract: string;
+  @ApiProperty({ description: 'Hedera Token ID' })
+  tokenAddress: string;
 
-  @ApiProperty({ description: 'Token ID' })
-  tokenId: number;
+  @ApiProperty({ description: 'NFT serial number' })
+  serialNumber: number;
 
   @ApiProperty({ description: 'Seller address' })
   seller: string;
@@ -206,11 +206,11 @@ export class MarketplaceAuctionDto {
   @ApiProperty({ description: 'Auction ID' })
   auctionId: number;
 
-  @ApiProperty({ description: 'Token contract address' })
-  tokenContract: string;
+  @ApiProperty({ description: 'Hedera Token ID' })
+  tokenAddress: string;
 
-  @ApiProperty({ description: 'Token ID' })
-  tokenId: number;
+  @ApiProperty({ description: 'NFT serial number' })
+  serialNumber: number;
 
   @ApiProperty({ description: 'Seller address' })
   seller: string;
@@ -238,11 +238,11 @@ export class EscrowDetailsDto {
   @ApiProperty({ description: 'Escrow ID' })
   id: number;
 
-  @ApiProperty({ description: 'Token contract address' })
-  tokenContract: string;
+  @ApiProperty({ description: 'Hedera Token ID' })
+  tokenAddress: string;
 
-  @ApiProperty({ description: 'Token ID' })
-  tokenId: number;
+  @ApiProperty({ description: 'NFT serial number' })
+  serialNumber: number;
 
   @ApiProperty({ description: 'Seller address' })
   seller: string;

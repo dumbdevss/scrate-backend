@@ -16,8 +16,8 @@ import {
 
 interface MarketplaceListing {
   listingId: number;
-  tokenContract: string;
-  tokenId: number;
+  tokenAddress: string;
+  serialNumber: number;
   seller: string;
   price: string;
   active: boolean;
@@ -26,8 +26,8 @@ interface MarketplaceListing {
 
 interface MarketplaceAuction {
   auctionId: number;
-  tokenContract: string;
-  tokenId: number;
+  tokenAddress: string;
+  serialNumber: number;
   seller: string;
   startingPrice: string;
   currentBid: string;
@@ -39,8 +39,8 @@ interface MarketplaceAuction {
 
 interface EscrowDetails {
   id: number;
-  tokenContract: string;
-  tokenId: number;
+  tokenAddress: string;
+  serialNumber: number;
   seller: string;
   buyer: string;
   price: string;
@@ -132,7 +132,7 @@ export class SmartContractService {
 
   // Marketplace Functions
 
-  async listIPNFT(tokenContract: string, tokenId: number, price: string): Promise<string> {
+  async listIPNFT(tokenAddress: string, serialNumber: number, price: string): Promise<string> {
     try {
       if (!this.marketplaceContractId) {
         throw new BadRequestException('Marketplace contract not initialized');
@@ -146,8 +146,8 @@ export class SmartContractService {
         .setFunction(
           'listItem',
           new ContractFunctionParameters()
-            .addAddress(tokenContract)
-            .addUint256(tokenId)
+            .addAddress(tokenAddress)
+            .addInt64(serialNumber)
             .addUint256(priceHbar.toTinybars())
         );
 
@@ -158,7 +158,7 @@ export class SmartContractService {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
 
-      this.logger.log(`Listed IP-NFT ${tokenId} for ${price} HBAR. Transaction: ${txResponse.transactionId}`);
+      this.logger.log(`Listed IP-NFT ${serialNumber} for ${price} HBAR. Transaction: ${txResponse.transactionId}`);
       return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to list IP-NFT: ${error.message}`);
@@ -229,7 +229,7 @@ export class SmartContractService {
     }
   }
 
-  async createAuction(tokenContract: string, tokenId: number, startingPrice: string, durationHours: number): Promise<string> {
+  async createAuction(tokenAddress: string, serialNumber: number, startingPrice: string, durationHours: number): Promise<string> {
     try {
       if (!this.marketplaceContractId) {
         throw new BadRequestException('Marketplace contract not initialized');
@@ -240,12 +240,12 @@ export class SmartContractService {
       
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(this.marketplaceContractId)
-        .setGas(300000)
+        .setGas(400000)
         .setFunction(
           'createAuction',
           new ContractFunctionParameters()
-            .addAddress(tokenContract)
-            .addUint256(tokenId)
+            .addAddress(tokenAddress)
+            .addInt64(serialNumber)
             .addUint256(startingPriceHbar.toTinybars())
             .addUint256(durationSeconds)
         );
@@ -257,7 +257,7 @@ export class SmartContractService {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
 
-      this.logger.log(`Created auction for IP-NFT ${tokenId}. Transaction: ${txResponse.transactionId}`);
+      this.logger.log(`Created auction for IP-NFT ${serialNumber}. Transaction: ${txResponse.transactionId}`);
       return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to create auction: ${error.message}`);
@@ -301,32 +301,35 @@ export class SmartContractService {
   // Escrow Functions
 
   async createEscrow(
-    tokenContract: string,
-    tokenId: number,
+    tokenAddress: string,
+    serialNumber: number,
     buyer: string,
     completionDays: number,
     verificationTypes: number[],
     verificationDescriptions: string[],
     expectedHashes: string[],
     verificationDeadlines: number[],
-    escrowAmount: string
+    price: string
   ): Promise<string> {
     try {
       if (!this.escrowContractId) {
         throw new BadRequestException('Escrow contract not initialized');
       }
 
-      const escrowHbar = Hbar.fromTinybars(parseInt(escrowAmount));
+      const priceHbar = Hbar.fromTinybars(parseInt(price));
+      
+      // Convert verification types to enum values
+      const verificationTypesUint8 = verificationTypes.map(t => t as number);
       
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(this.escrowContractId)
         .setGas(500000)
-        .setPayableAmount(escrowHbar)
+        .setPayableAmount(priceHbar)
         .setFunction(
           'createEscrow',
           new ContractFunctionParameters()
-            .addAddress(tokenContract)
-            .addUint256(tokenId)
+            .addAddress(tokenAddress)
+            .addInt64(serialNumber)
             .addAddress(buyer)
             .addUint256(completionDays)
             .addUint8Array(verificationTypes)
@@ -342,7 +345,7 @@ export class SmartContractService {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
 
-      this.logger.log(`Created escrow for IP-NFT ${tokenId}. Transaction: ${txResponse.transactionId}`);
+      this.logger.log(`Created escrow for IP-NFT ${serialNumber}. Transaction: ${txResponse.transactionId}`);
       return txResponse.transactionId.toString();
     } catch (error) {
       this.logger.error(`Failed to create escrow: ${error.message}`);
@@ -453,30 +456,22 @@ export class SmartContractService {
         throw new BadRequestException('Marketplace contract not initialized');
       }
 
-      const contractCallQuery = new ContractCallQuery()
-        .setContractId(this.marketplaceContractId)
-        .setGas(100000)
-        .setFunction(
-          'getListing',
-          new ContractFunctionParameters()
-            .addUint256(listingId)
-        );
+      const result = await this.queryContract(
+        this.marketplaceContractId,
+        'getListing',
+        new ContractFunctionParameters()
+          .addUint256(listingId)
+      );
 
-      const result = await contractCallQuery.execute(this.client);
-      
-      // Parse the result based on the expected return structure
-      // This is a simplified example - you'll need to properly decode the result
-      const listing: MarketplaceListing = {
-        listingId: listingId,
-        tokenContract: result.getString(0),
-        tokenId: result.getUint256(1).toNumber(),
-        seller: result.getString(2),
-        price: result.getUint256(3).toString(),
-        active: result.getBool(4),
-        createdAt: result.getUint256(5).toNumber()
+      return {
+        listingId: result.getUint256(0).toNumber(),
+        tokenAddress: result.getAddress(1),
+        serialNumber: result.getInt64(2).toNumber(),
+        seller: result.getAddress(3),
+        price: result.getUint256(4).toString(),
+        active: result.getBool(5),
+        createdAt: result.getUint256(6).toNumber()
       };
-
-      return listing;
     } catch (error) {
       this.logger.error(`Failed to get listing: ${error.message}`);
       throw new BadRequestException(`Failed to get listing: ${error.message}`);
@@ -489,38 +484,29 @@ export class SmartContractService {
         throw new BadRequestException('Escrow contract not initialized');
       }
 
-      const contractCallQuery = new ContractCallQuery()
-        .setContractId(this.escrowContractId)
-        .setGas(100000)
-        .setFunction(
-          'getEscrow',
-          new ContractFunctionParameters()
-            .addUint256(escrowId)
-        );
+      const result = await this.queryContract(
+        this.escrowContractId,
+        'getEscrow',
+        new ContractFunctionParameters()
+          .addUint256(escrowId)
+      );
 
-      const result = await contractCallQuery.execute(this.client);
-      
-      // Parse the result based on the expected return structure
-      const escrow: EscrowDetails = {
-        id: escrowId,
-        tokenContract: result.getString(0),
-        tokenId: result.getUint256(1).toNumber(),
-        seller: result.getString(2),
-        buyer: result.getString(3),
-        price: result.getUint256(4).toString(),
-        status: result.getUint8(5),
-        createdAt: result.getUint256(6).toNumber(),
-        completionDeadline: result.getUint256(7).toNumber()
+      return {
+        id: result.getUint256(0).toNumber(),
+        tokenAddress: result.getAddress(1),
+        serialNumber: result.getInt64(2).toNumber(),
+        seller: result.getAddress(3),
+        buyer: result.getAddress(4),
+        price: result.getUint256(5).toString(),
+        status: result.getUint8(6),
+        createdAt: result.getUint256(7).toNumber(),
+        completionDeadline: result.getUint256(8).toNumber()
       };
-
-      return escrow;
     } catch (error) {
       this.logger.error(`Failed to get escrow: ${error.message}`);
       throw new BadRequestException(`Failed to get escrow: ${error.message}`);
     }
   }
-
-  // Additional methods needed by controllers
 
   async getAuction(auctionId: number): Promise<MarketplaceAuction> {
     try {
@@ -528,31 +514,25 @@ export class SmartContractService {
         throw new BadRequestException('Marketplace contract not initialized');
       }
 
-      const contractCallQuery = new ContractCallQuery()
-        .setContractId(this.marketplaceContractId)
-        .setGas(100000)
-        .setFunction(
-          'getAuction',
-          new ContractFunctionParameters()
-            .addUint256(auctionId)
-        );
+      const result = await this.queryContract(
+        this.marketplaceContractId,
+        'getAuction',
+        new ContractFunctionParameters()
+          .addUint256(auctionId)
+      );
 
-      const result = await contractCallQuery.execute(this.client);
-      
-      const auction: MarketplaceAuction = {
-        auctionId: auctionId,
-        tokenContract: result.getString(0),
-        tokenId: result.getUint256(1).toNumber(),
-        seller: result.getString(2),
-        startingPrice: result.getUint256(3).toString(),
-        currentBid: result.getUint256(4).toString(),
-        currentBidder: result.getString(5),
-        endTime: result.getUint256(6).toNumber(),
-        active: result.getBool(7),
-        createdAt: result.getUint256(8).toNumber()
+      return {
+        auctionId: result.getUint256(0).toNumber(),
+        tokenAddress: result.getAddress(1),
+        serialNumber: result.getInt64(2).toNumber(),
+        seller: result.getAddress(3),
+        startingPrice: result.getUint256(4).toString(),
+        currentBid: result.getUint256(5).toString(),
+        currentBidder: result.getAddress(6),
+        endTime: result.getUint256(7).toNumber(),
+        active: result.getBool(8),
+        createdAt: result.getUint256(9).toNumber()
       };
-
-      return auction;
     } catch (error) {
       this.logger.error(`Failed to get auction: ${error.message}`);
       throw new BadRequestException(`Failed to get auction: ${error.message}`);
@@ -626,16 +606,31 @@ export class SmartContractService {
         throw new BadRequestException('Escrow contract not initialized');
       }
 
-      const contractCallQuery = new ContractCallQuery()
-        .setContractId(this.escrowContractId)
-        .setGas(100000)
-        .setFunction('getTotalEscrows');
+      const result = await this.queryContract(
+        this.escrowContractId,
+        'getTotalEscrows',
+        new ContractFunctionParameters()
+      );
 
-      const result = await contractCallQuery.execute(this.client);
       return result.getUint256(0).toNumber();
     } catch (error) {
       this.logger.error(`Failed to get total escrows: ${error.message}`);
       throw new BadRequestException(`Failed to get total escrows: ${error.message}`);
+    }
+  }
+
+  private async queryContract(contractId: ContractId, functionName: string, params: ContractFunctionParameters) {
+    try {
+      const query = new ContractCallQuery()
+        .setContractId(contractId)
+        .setGas(100000)
+        .setFunction(functionName, params);
+
+      const result = await query.execute(this.client);
+      return result;
+    } catch (error) {
+      this.logger.error(`Contract query failed: ${error.message}`);
+      throw new Error(`Contract query failed: ${error.message}`);
     }
   }
 

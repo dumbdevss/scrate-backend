@@ -26,17 +26,17 @@ export class EscrowController {
     type: TransactionResponseDto
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async createEscrow(@Body() escrowDto: CreateEscrowDto): Promise<TransactionResponseDto> {
+  async createEscrow(@Body() createDto: CreateEscrowDto): Promise<TransactionResponseDto> {
     const txHash = await this.smartContractService.createEscrow(
-      escrowDto.tokenContract,
-      escrowDto.tokenId,
-      escrowDto.buyer,
-      escrowDto.completionDays,
-      escrowDto.verificationTypes,
-      escrowDto.verificationDescriptions,
-      escrowDto.expectedHashes,
-      escrowDto.verificationDeadlines,
-      escrowDto.price
+      createDto.tokenAddress,
+      createDto.serialNumber,
+      createDto.buyer,
+      createDto.completionDays,
+      createDto.verificationTypes,
+      createDto.verificationDescriptions,
+      createDto.expectedHashes,
+      createDto.verificationDeadlines,
+      createDto.price
     );
     return {
       transactionHash: txHash,
@@ -53,8 +53,8 @@ export class EscrowController {
     type: EscrowDetailsDto
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async getEscrow(@Param('escrowId') escrowId: string): Promise<EscrowDetailsDto> {
-    return this.smartContractService.getEscrow(parseInt(escrowId));
+  async getEscrow(@Param('escrowId') escrowId: number): Promise<EscrowDetailsDto> {
+    return this.smartContractService.getEscrow(escrowId);
   }
 
   @Post(':escrowId/complete')

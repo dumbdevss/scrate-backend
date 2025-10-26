@@ -29,8 +29,8 @@ export class MarketplaceController {
   @ApiResponse({ status: 400, description: 'Bad request' })
   async listIPNFT(@Body() listDto: ListIPNFTDto): Promise<TransactionResponseDto> {
     const txHash = await this.smartContractService.listIPNFT(
-      listDto.tokenContract,
-      listDto.tokenId,
+      listDto.tokenAddress,
+      listDto.serialNumber,
       listDto.price
     );
     return {
@@ -86,8 +86,8 @@ export class MarketplaceController {
     type: MarketplaceListingDto
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async getListing(@Param('listingId') listingId: string): Promise<MarketplaceListingDto> {
-    return this.smartContractService.getListing(parseInt(listingId));
+  async getListing(@Param('listingId') listingId: number): Promise<MarketplaceListingDto> {
+    return this.smartContractService.getListing(listingId);
   }
 
   // Auction Management
@@ -102,8 +102,8 @@ export class MarketplaceController {
   @ApiResponse({ status: 400, description: 'Bad request' })
   async createAuction(@Body() auctionDto: CreateAuctionDto): Promise<TransactionResponseDto> {
     const txHash = await this.smartContractService.createAuction(
-      auctionDto.tokenContract,
-      auctionDto.tokenId,
+      auctionDto.tokenAddress,
+      auctionDto.serialNumber,
       auctionDto.startingPrice,
       auctionDto.durationHours
     );
@@ -160,8 +160,8 @@ export class MarketplaceController {
     type: MarketplaceAuctionDto
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async getAuction(@Param('auctionId') auctionId: string): Promise<MarketplaceAuctionDto> {
-    return this.smartContractService.getAuction(parseInt(auctionId));
+  async getAuction(@Param('auctionId') auctionId: number): Promise<MarketplaceAuctionDto> {
+    return this.smartContractService.getAuction(auctionId);
   }
 
   // Statistics
