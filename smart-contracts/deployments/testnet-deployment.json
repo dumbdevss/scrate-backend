@@ -3,16 +3,16 @@
   "deployer": "0xb797Af5E4514129e6aFC8cE0744f7df10C14aC5b",
   "contracts": {
     "IPNFTMarketplace": {
-      "address": "0xF553ecF8f367D88ac219bbcd2CA43a5b249a9142",
-      "transactionHash": "0xb9e4fe2ca45bb53fcacebf239da4821eb4f358aa830159074985b4299fec1abf",
+      "address": "0x417c84553c4BdF7f506D01Dbe4f80112fdBfaaaf",
+      "transactionHash": "0xba598c194f9406c8cc1efaa3c48be8d074fd62abbabcfbfc519c13db490b507c",
       "platformFee": "250"
     },
     "IPNFTEscrow": {
-      "address": "0x379A3F0eE12f402051D02236338E1b1020770231",
-      "transactionHash": "0x60c48dd907c2e827611d3fcc29c01dc00be4e260b2cd56f54b71b31bfeaf6e16",
+      "address": "0x17879105Aab6d5af44787688cA75d83CF692CaED",
+      "transactionHash": "0x69406edaa7caed8ee50af1191095739db69710bc2811a6f6c6d00f32b5ac523d",
       "escrowFeeRate": "100",
       "disputeResolver": "0xb797Af5E4514129e6aFC8cE0744f7df10C14aC5b"
     }
   },
-  "deployedAt": "2025-10-26T04:54:50.614Z"
+  "deployedAt": "2025-10-26T06:44:38.027Z"
 }

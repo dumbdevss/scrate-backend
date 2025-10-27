@@ -198,72 +198,10 @@ export class CreateIPNFTDto {
 }
 
 export class MintIPNFTDto extends CreateIPNFTDto {
-  @ApiProperty({ description: 'Recipient account ID for the minted NFT' })
+  @ApiProperty({ description: 'Recipient account ID' })
   @IsString()
   @IsNotEmpty()
   recipient: string;
-}
-
-export class MarketplaceListingDto {
-  @ApiProperty({ description: 'Token ID to list' })
-  @IsString()
-  @IsNotEmpty()
-  tokenId: string;
-
-  @ApiProperty({ description: 'Listing price in HBAR' })
-  @IsNumber()
-  @Min(0.01)
-  price: number;
-}
-
-export class MarketplaceAuctionDto {
-  @ApiProperty({ description: 'Token ID to auction' })
-  @IsString()
-  @IsNotEmpty()
-  tokenId: string;
-
-  @ApiProperty({ description: 'Starting price in HBAR' })
-  @IsNumber()
-  @Min(0.01)
-  startingPrice: number;
-
-  @ApiProperty({ description: 'Auction duration in hours' })
-  @IsNumber()
-  @Min(1)
-  @Max(720) // 30 days max
-  duration: number;
-}
-
-export class EscrowCreateDto {
-  @ApiProperty({ description: 'Token ID for escrow' })
-  @IsString()
-  @IsNotEmpty()
-  tokenId: string;
-
-  @ApiProperty({ description: 'Buyer account ID' })
-  @IsString()
-  @IsNotEmpty()
-  buyer: string;
-
-  @ApiProperty({ description: 'Escrow price in HBAR' })
-  @IsNumber()
-  @Min(0.01)
-  price: number;
-
-  @ApiProperty({ description: 'Completion deadline in days' })
-  @IsNumber()
-  @Min(1)
-  @Max(90)
-  completionDays: number;
-
-  @ApiProperty({ description: 'Verification requirements' })
-  @IsArray()
-  @IsObject({ each: true })
-  verificationRequirements: {
-    type: string;
-    description: string;
-    deadline: number; // days
-  }[];
 }
 
 export class IPNFTAnalyticsDto {

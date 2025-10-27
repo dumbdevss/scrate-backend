@@ -21,8 +21,6 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
     uint256 public platformFee = 250;
     uint256 public constant MAX_PLATFORM_FEE = 1000; // 10% max
     
-    IHederaTokenService internal constant hederaService = IHederaTokenService(address(0x167));
-    
     struct Listing {
         uint256 listingId;
         address tokenAddress;
@@ -111,7 +109,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
     
     modifier onlyTokenOwner(address tokenAddress, int64 serialNumber) {
         (int responseCode, IHederaTokenService.NonFungibleTokenInfo memory info) = 
-            hederaService.getNonFungibleTokenInfo(tokenAddress, serialNumber);
+            HederaTokenService.getNonFungibleTokenInfo(tokenAddress, serialNumber);
         require(responseCode == HederaResponseCodes.SUCCESS, "Failed to get NFT info");
         require(info.ownerId == msg.sender, "Not token owner");
         _;
@@ -130,6 +128,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
 
     constructor() Ownable(msg.sender) {}
     
+    
     /**
      * @dev List an IP-NFT for direct sale
      */
@@ -143,7 +142,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
         require(tokenToAuction[tokenAddress][serialNumber] == 0, "Already in auction");
         
         // Transfer token to marketplace
-        int response = hederaService.transferNFT(tokenAddress, msg.sender, address(this), serialNumber);
+        int response = HederaTokenService.transferNFT(tokenAddress, msg.sender, address(this), serialNumber);
         require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
         
         _listingIds++;
@@ -185,7 +184,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
         uint256 sellerAmount = listing.price - fee;
         
         // Transfer token to buyer
-        int response = hederaService.transferNFT(
+        int response = HederaTokenService.transferNFT(
             listing.tokenAddress,
             address(this),
             msg.sender,
@@ -235,7 +234,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
         uint256 sellerAmount = listing.price - fee;
         
         // Transfer token to buyer
-        int response = hederaService.transferNFT(
+        int response = HederaTokenService.transferNFT(
             listing.tokenAddress,
             address(this),
             msg.sender,
@@ -279,7 +278,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
         tokenToListing[listing.tokenAddress][listing.serialNumber] = 0;
         
         // Return token to seller
-        int response = hederaService.transferNFT(
+        int response = HederaTokenService.transferNFT(
             listing.tokenAddress,
             address(this),
             listing.seller,
@@ -306,7 +305,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
         require(tokenToAuction[tokenAddress][serialNumber] == 0, "Already in auction");
         
         // Transfer token to marketplace
-        int response = hederaService.transferNFT(tokenAddress, msg.sender, address(this), serialNumber);
+        int response = HederaTokenService.transferNFT(tokenAddress, msg.sender, address(this), serialNumber);
         require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
         
         _auctionIds++;
@@ -388,7 +387,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
             uint256 sellerAmount = auction.currentBid - fee;
             
             // Transfer token to winner
-            int response = hederaService.transferNFT(
+            int response = HederaTokenService.transferNFT(
                 auction.tokenAddress,
                 address(this),
                 auction.currentBidder,
@@ -405,7 +404,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
             emit AuctionEnded(auctionId, auction.currentBidder, auction.currentBid);
         } else {
             // No bids, return token to seller
-            int response = hederaService.transferNFT(
+            int response = HederaTokenService.transferNFT(
                 auction.tokenAddress,
                 address(this),
                 auction.seller,
@@ -430,7 +429,7 @@ contract IPNFTMarketplace is HederaTokenService, KeyHelper, Ownable, ReentrancyG
         tokenToAuction[auction.tokenAddress][auction.serialNumber] = 0;
         
         // Return token to seller
-        int response = hederaService.transferNFT(
+        int response = HederaTokenService.transferNFT(
             auction.tokenAddress,
             address(this),
             auction.seller,

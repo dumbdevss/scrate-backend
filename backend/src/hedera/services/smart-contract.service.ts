@@ -11,7 +11,8 @@ import {
   TransactionResponse,
   ContractFunctionParameters,
   TransactionReceipt,
-  Status
+  Status,
+  TokenAssociateTransaction
 } from '@hashgraph/sdk';
 
 interface MarketplaceListing {
@@ -94,6 +95,9 @@ export class SmartContractService {
       const marketplaceAddress = this.configService.get<string>('MARKETPLACE_CONTRACT_ADDRESS');
       const escrowAddress = this.configService.get<string>('ESCROW_CONTRACT_ADDRESS');
 
+      console.log('Marketplace contract address:', marketplaceAddress);
+      console.log('Escrow contract address:', escrowAddress);
+
       if (marketplaceAddress) {
         try {
           // Check if it's a Solidity address (starts with 0x)
@@ -138,22 +142,42 @@ export class SmartContractService {
         throw new BadRequestException('Marketplace contract not initialized');
       }
 
+      console.log('Listing IP-NFT...', tokenAddress, serialNumber, price, this.marketplaceContractId);
       const priceHbar = Hbar.fromTinybars(parseInt(price));
-      
+
+      console.log(this.marketplaceContractId.toSolidityAddress());
+
+      const associateAliceTx = new TokenAssociateTransaction()
+        .setAccountId(AccountId.fromString('0.0.7133898'))
+        .setTokenIds(['0.0.7126251'])
+        .freezeWith(this.client)
+
+      const signTxAssociateAlice = await associateAliceTx.sign(this.operatorKey);
+
+      // Submit the transaction to a Hedera network
+      const associateAliceTxSubmit = await signTxAssociateAlice.execute(this.client);
+
+      // Get the transaction receipt
+      const associateAliceRx = await associateAliceTxSubmit.getReceipt(this.client);
+
+      console.log('Associate Alice receipt:', associateAliceRx);
+
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(this.marketplaceContractId)
-        .setGas(300000)
+        .setGas(15_000_000)
         .setFunction(
           'listItem',
           new ContractFunctionParameters()
             .addAddress(tokenAddress)
             .addInt64(serialNumber)
             .addUint256(priceHbar.toTinybars())
-        );
+        )
 
-      const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
+      let signExecuteTx = await contractExecuteTx.sign(this.operatorKey);
+
+      const txResponse: TransactionResponse = await signExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -173,7 +197,7 @@ export class SmartContractService {
       }
 
       const paymentHbar = Hbar.fromTinybars(parseInt(paymentAmount));
-      
+
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(this.marketplaceContractId)
         .setGas(300000)
@@ -186,7 +210,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -216,7 +240,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -237,7 +261,7 @@ export class SmartContractService {
 
       const startingPriceHbar = Hbar.fromTinybars(parseInt(startingPrice));
       const durationSeconds = durationHours * 3600;
-      
+
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(this.marketplaceContractId)
         .setGas(400000)
@@ -252,7 +276,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -272,7 +296,7 @@ export class SmartContractService {
       }
 
       const bidHbar = Hbar.fromTinybars(parseInt(bidAmount));
-      
+
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(this.marketplaceContractId)
         .setGas(300000)
@@ -285,7 +309,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -317,10 +341,10 @@ export class SmartContractService {
       }
 
       const priceHbar = Hbar.fromTinybars(parseInt(price));
-      
+
       // Convert verification types to enum values
       const verificationTypesUint8 = verificationTypes.map(t => t as number);
-      
+
       const contractExecuteTx = new ContractExecuteTransaction()
         .setContractId(this.escrowContractId)
         .setGas(500000)
@@ -340,7 +364,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -373,7 +397,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -405,7 +429,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -435,7 +459,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -556,7 +580,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -652,7 +676,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
@@ -684,7 +708,7 @@ export class SmartContractService {
 
       const txResponse: TransactionResponse = await contractExecuteTx.execute(this.client);
       const receipt: TransactionReceipt = await txResponse.getReceipt(this.client);
-      
+
       if (receipt.status !== Status.Success) {
         throw new Error(`Transaction failed with status: ${receipt.status}`);
       }
