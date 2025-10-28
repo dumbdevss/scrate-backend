@@ -3,16 +3,15 @@ import { ApiProperty } from '@nestjs/swagger';
 
 // Marketplace DTOs
 export class ListIPNFTDto {
-  @ApiProperty({ description: 'Hedera Token ID (shard.realm.num format)' })
+  @ApiProperty({ description: 'ERC721 contract address' })
   @IsString()
   tokenAddress: string;
 
-  @ApiProperty({ description: 'NFT serial number' })
-  @IsNumber()
-  @Min(1)
-  serialNumber: number;
+  @ApiProperty({ description: 'NFT token ID' })
+  @IsString()
+  tokenId: string;
 
-  @ApiProperty({ description: 'Price in HBAR (tinybars)' })
+  @ApiProperty({ description: 'Price in ETH (wei)' })
   @IsString()
   price: string;
 }
@@ -23,22 +22,21 @@ export class PurchaseIPNFTDto {
   @Min(1)
   listingId: number;
 
-  @ApiProperty({ description: 'Payment amount in HBAR (tinybars)' })
+  @ApiProperty({ description: 'Payment amount in ETH (wei)' })
   @IsString()
   paymentAmount: string;
 }
 
 export class CreateAuctionDto {
-  @ApiProperty({ description: 'Hedera Token ID (shard.realm.num format)' })
+  @ApiProperty({ description: 'ERC721 contract address' })
   @IsString()
   tokenAddress: string;
 
-  @ApiProperty({ description: 'NFT serial number' })
-  @IsNumber()
-  @Min(1)
-  serialNumber: number;
+  @ApiProperty({ description: 'NFT token ID' })
+  @IsString()
+  tokenId: string;
 
-  @ApiProperty({ description: 'Starting price in HBAR (tinybars)' })
+  @ApiProperty({ description: 'Starting price in ETH (wei)' })
   @IsString()
   startingPrice: string;
 
@@ -55,23 +53,22 @@ export class PlaceBidDto {
   @Min(1)
   auctionId: number;
 
-  @ApiProperty({ description: 'Bid amount in HBAR (tinybars)' })
+  @ApiProperty({ description: 'Bid amount in ETH (wei)' })
   @IsString()
   bidAmount: string;
 }
 
 // Escrow DTOs
 export class CreateEscrowDto {
-  @ApiProperty({ description: 'Hedera Token ID (shard.realm.num format)' })
+  @ApiProperty({ description: 'ERC721 contract address' })
   @IsString()
   tokenAddress: string;
 
-  @ApiProperty({ description: 'NFT serial number' })
-  @IsNumber()
-  @Min(1)
-  serialNumber: number;
+  @ApiProperty({ description: 'NFT token ID' })
+  @IsString()
+  tokenId: string;
 
-  @ApiProperty({ description: 'Buyer address (Hedera Account ID)' })
+  @ApiProperty({ description: 'Buyer address (Ethereum address)' })
   @IsString()
   buyer: string;
 
@@ -101,7 +98,7 @@ export class CreateEscrowDto {
   @IsNumber({}, { each: true })
   verificationDeadlines: number[];
 
-  @ApiProperty({ description: 'Price in HBAR (tinybars)' })
+  @ApiProperty({ description: 'Price in ETH (wei)' })
   @IsString()
   price: string;
 }

@@ -13,37 +13,55 @@ async function main() {
   console.log("Deploying contracts with the account:", deployer.address);
   console.log("Account balance:", (await ethers.provider.getBalance(deployer.address)).toString());
 
-  // 1) Deploy IPNFTMarketplace
-  console.log("\n1. Deploying IPNFTMarketplace...");
+  // 1) Deploy IPNFT Contract
+  console.log("\n1. Deploying IPNFT...");
+  const IPNFT = await ethers.getContractFactory("IPNFT");
+  const ipnft = await IPNFT.deploy("Intellectual Property NFT", "IPNFT");
+  await ipnft.waitForDeployment();
+  const ipnftAddress = await ipnft.getAddress();
+  console.log("IPNFT deployed to:", ipnftAddress);
+
+  // 2) Deploy IPNFTMarketplace
+  console.log("\n2. Deploying IPNFTMarketplace...");
   const IPNFTMarketplace = await ethers.getContractFactory("IPNFTMarketplace");
   const marketplace = await IPNFTMarketplace.deploy();
   await marketplace.waitForDeployment();
   const marketplaceAddress = await marketplace.getAddress();
   console.log("IPNFTMarketplace deployed to:", marketplaceAddress);
 
-  // 2) Deploy IPNFTEscrow with dispute resolver
-  console.log("\n2. Deploying IPNFTEscrow...");
+  // 3) Deploy IPNFTEscrow with dispute resolver
+  console.log("\n3. Deploying IPNFTEscrow...");
   const IPNFTEscrow = await ethers.getContractFactory("IPNFTEscrow");
   const escrow = await IPNFTEscrow.deploy(deployer.address); // Using deployer as initial dispute resolver
   await escrow.waitForDeployment();
   const escrowAddress = await escrow.getAddress();
   console.log("IPNFTEscrow deployed to:", escrowAddress);
 
-  // 3) Verify initial configuration
-  console.log("\n3. Verifying initial configuration...");
+  // 4) Verify initial configuration
+  console.log("\n4. Verifying initial configuration...");
+  const ipnftName = await ipnft.name();
+  const ipnftSymbol = await ipnft.symbol();
   const marketplaceFee = await marketplace.platformFee();
   const escrowFeeRate = await escrow.escrowFeeRate();
   const disputeResolver = await escrow.disputeResolver();
 
+  console.log("IPNFT name:", ipnftName);
+  console.log("IPNFT symbol:", ipnftSymbol);
   console.log("Marketplace platform fee:", marketplaceFee.toString(), "basis points");
   console.log("Escrow fee rate:", escrowFeeRate.toString(), "basis points");
   console.log("Dispute resolver:", disputeResolver);
 
-  // 4) Save deployment info
+  // 5) Save deployment info
   const deploymentInfo = {
     network: (await ethers.provider.getNetwork()).name,
     deployer: deployer.address,
     contracts: {
+      IPNFT: {
+        address: ipnftAddress,
+        transactionHash: ipnft.deploymentTransaction()?.hash,
+        name: ipnftName,
+        symbol: ipnftSymbol,
+      },
       IPNFTMarketplace: {
         address: marketplaceAddress,
         transactionHash: marketplace.deploymentTransaction()?.hash,

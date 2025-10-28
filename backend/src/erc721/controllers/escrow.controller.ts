@@ -1,25 +1,24 @@
 import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { SmartContractService } from '../services/smart-contract.service';
+import { ERC721Service } from '../services/erc721.service';
 import {
   CreateEscrowDto,
   SubmitVerificationDto,
   ApproveVerificationDto,
   RaiseDisputeDto,
   ResolveDisputeDto,
-  TransactionResponseDto,
-  EscrowDetailsDto
-} from '../dto/smart-contract.dto';
+  TransactionResponseDto
+} from '../../hedera/dto/smart-contract.dto';
 
-@ApiTags('Escrow')
-@Controller('api/escrow')
+@ApiTags('Escrow ERC721')
+@Controller('api/v2/escrow')
 export class EscrowController {
-  constructor(private readonly smartContractService: SmartContractService) {}
+  constructor(private readonly erc721Service: ERC721Service) {}
 
   // Escrow Management
   @Post('create')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create an escrow agreement for RWA IP-NFT' })
+  @ApiOperation({ summary: 'Create an escrow agreement for RWA IP-NFT using ERC721' })
   @ApiResponse({ 
     status: 201, 
     description: 'Escrow created successfully',
@@ -27,9 +26,9 @@ export class EscrowController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async createEscrow(@Body() createDto: CreateEscrowDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.createEscrow(
+    const txHash = await this.erc721Service.createEscrow(
       createDto.tokenAddress,
-      parseInt(createDto.tokenId), // Convert tokenId to serialNumber for Hedera
+      createDto.tokenId,
       createDto.buyer,
       createDto.completionDays,
       createDto.verificationTypes,
@@ -49,12 +48,15 @@ export class EscrowController {
   @ApiParam({ name: 'escrowId', description: 'Escrow ID' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Escrow details retrieved successfully',
-    type: EscrowDetailsDto
+    description: 'Escrow details retrieved successfully'
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async getEscrow(@Param('escrowId') escrowId: number): Promise<EscrowDetailsDto> {
-    return this.smartContractService.getEscrow(escrowId);
+  async getEscrow(@Param('escrowId') escrowId: string) {
+    // This would need to be implemented in the ERC721Service
+    return {
+      escrowId: parseInt(escrowId),
+      message: 'Escrow retrieval functionality to be implemented'
+    };
   }
 
   @Post(':escrowId/complete')
@@ -68,10 +70,10 @@ export class EscrowController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async completeEscrow(@Param('escrowId') escrowId: string): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.completeEscrow(parseInt(escrowId));
+    // This would need to be implemented in the ERC721Service
     return {
-      transactionHash: txHash,
-      message: 'Escrow completed successfully'
+      transactionHash: 'placeholder-tx-hash',
+      message: 'Escrow completion functionality to be implemented'
     };
   }
 
@@ -86,15 +88,10 @@ export class EscrowController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async submitVerification(@Body() verificationDto: SubmitVerificationDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.submitVerification(
-      verificationDto.escrowId,
-      verificationDto.requirementIndex,
-      verificationDto.evidence,
-      verificationDto.documentHash
-    );
+    // This would need to be implemented in the ERC721Service
     return {
-      transactionHash: txHash,
-      message: 'Verification submitted successfully'
+      transactionHash: 'placeholder-tx-hash',
+      message: 'Verification submission functionality to be implemented'
     };
   }
 
@@ -108,14 +105,10 @@ export class EscrowController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async approveVerification(@Body() approvalDto: ApproveVerificationDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.approveVerification(
-      approvalDto.escrowId,
-      approvalDto.requirementIndex,
-      approvalDto.comment
-    );
+    // This would need to be implemented in the ERC721Service
     return {
-      transactionHash: txHash,
-      message: 'Verification approved successfully'
+      transactionHash: 'placeholder-tx-hash',
+      message: 'Verification approval functionality to be implemented'
     };
   }
 
@@ -130,13 +123,10 @@ export class EscrowController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async raiseDispute(@Body() disputeDto: RaiseDisputeDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.raiseDispute(
-      disputeDto.escrowId,
-      disputeDto.reason
-    );
+    // This would need to be implemented in the ERC721Service
     return {
-      transactionHash: txHash,
-      message: 'Dispute raised successfully'
+      transactionHash: 'placeholder-tx-hash',
+      message: 'Dispute raising functionality to be implemented'
     };
   }
 
@@ -150,14 +140,10 @@ export class EscrowController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async resolveDispute(@Body() resolveDto: ResolveDisputeDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.resolveDispute(
-      resolveDto.escrowId,
-      resolveDto.winner,
-      resolveDto.resolution
-    );
+    // This would need to be implemented in the ERC721Service
     return {
-      transactionHash: txHash,
-      message: 'Dispute resolved successfully'
+      transactionHash: 'placeholder-tx-hash',
+      message: 'Dispute resolution functionality to be implemented'
     };
   }
 
@@ -169,35 +155,9 @@ export class EscrowController {
     description: 'Total escrows retrieved successfully'
   })
   async getTotalEscrows(): Promise<{ totalEscrows: number }> {
-    const total = await this.smartContractService.getTotalEscrows();
-    return { totalEscrows: total };
-  }
-
-  // ERC721 Endpoints
-  @Post('erc721/create')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create an escrow agreement using ERC721 contract' })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'ERC721 Escrow created successfully',
-    type: TransactionResponseDto
-  })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  async createEscrowERC721(@Body() createDto: CreateEscrowDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.createEscrowERC721(
-      createDto.tokenAddress,
-      createDto.tokenId,
-      createDto.buyer,
-      createDto.completionDays,
-      createDto.verificationTypes,
-      createDto.verificationDescriptions,
-      createDto.expectedHashes,
-      createDto.verificationDeadlines,
-      createDto.price
-    );
-    return {
-      transactionHash: txHash,
-      message: 'ERC721 Escrow created successfully'
+    // This would need to be implemented in the ERC721Service
+    return { 
+      totalEscrows: 0 
     };
   }
 }

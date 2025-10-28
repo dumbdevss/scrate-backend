@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ethers } from 'ethers';
 import {
   Client,
   AccountId,
@@ -53,14 +54,27 @@ interface EscrowDetails {
 @Injectable()
 export class SmartContractService {
   private readonly logger = new Logger(SmartContractService.name);
+  
+  // Hedera properties
   private client: Client;
   private operatorId: AccountId;
   private operatorKey: PrivateKey;
   private marketplaceContractId: ContractId;
   private escrowContractId: ContractId;
+  
+  // ERC721 properties
+  private provider: ethers.JsonRpcProvider;
+  private wallet: ethers.Wallet;
+  private erc721MarketplaceContract: ethers.Contract;
+  private erc721EscrowContract: ethers.Contract;
+  private erc721ContractAddresses: {
+    marketplace: string;
+    escrow: string;
+  };
 
   constructor(private configService: ConfigService) {
     this.initializeClient();
+    this.initializeERC721();
   }
 
   private initializeClient() {
@@ -131,6 +145,63 @@ export class SmartContractService {
       this.logger.log(`Hedera client initialized for ${network}`);
     } catch (error) {
       this.logger.error(`Failed to initialize Hedera client: ${error.message}`);
+    }
+  }
+
+  private initializeERC721() {
+    const rpcUrl = this.configService.get<string>('RPC_URL');
+    const privateKey = this.configService.get<string>('PRIVATE_KEY');
+
+    if (!rpcUrl || !privateKey) {
+      this.logger.warn('RPC_URL and PRIVATE_KEY not provided - ERC721 functionality will be disabled');
+      return;
+    }
+
+    try {
+      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+      this.wallet = new ethers.Wallet(privateKey, this.provider);
+      
+      this.erc721ContractAddresses = {
+        marketplace: this.configService.get<string>('MARKETPLACE_CONTRACT_ADDRESS', ''),
+        escrow: this.configService.get<string>('ESCROW_CONTRACT_ADDRESS', ''),
+      };
+
+      // Initialize ERC721 contracts with basic ABIs
+      if (this.erc721ContractAddresses.marketplace) {
+        const marketplaceAbi = [
+          "function listItem(address tokenAddress, uint256 tokenId, uint256 price) external",
+          "function purchaseItem(uint256 listingId) external payable",
+          "function cancelListing(uint256 listingId) external",
+          "function createAuction(address tokenAddress, uint256 tokenId, uint256 startingPrice, uint256 duration) external",
+          "function placeBid(uint256 auctionId) external payable",
+          "function endAuction(uint256 auctionId) external"
+        ];
+        
+        this.erc721MarketplaceContract = new ethers.Contract(
+          this.erc721ContractAddresses.marketplace,
+          marketplaceAbi,
+          this.wallet
+        );
+      }
+
+      if (this.erc721ContractAddresses.escrow) {
+        const escrowAbi = [
+          "function createEscrow(address tokenAddress, uint256 tokenId, address buyer, uint256 completionDays, uint8[] verificationTypes, string[] verificationDescriptions, bytes32[] expectedHashes, uint256[] verificationDeadlines) external payable",
+          "function completeEscrow(uint256 escrowId) external",
+          "function submitVerification(uint256 escrowId, uint256 requirementIndex, string evidence, bytes32 documentHash) external",
+          "function approveVerification(uint256 escrowId, uint256 requirementIndex, string comment) external"
+        ];
+        
+        this.erc721EscrowContract = new ethers.Contract(
+          this.erc721ContractAddresses.escrow,
+          escrowAbi,
+          this.wallet
+        );
+      }
+
+      this.logger.log('ERC721 contracts initialized');
+    } catch (error) {
+      this.logger.error(`Failed to initialize ERC721: ${error.message}`);
     }
   }
 
@@ -719,5 +790,100 @@ export class SmartContractService {
       this.logger.error(`Failed to resolve dispute: ${error.message}`);
       throw new BadRequestException(`Failed to resolve dispute: ${error.message}`);
     }
+  }
+
+  // ERC721 Methods
+  async listIPNFTERC721(tokenAddress: string, tokenId: string, price: string): Promise<string> {
+    try {
+      if (!this.erc721MarketplaceContract) {
+        throw new BadRequestException('ERC721 Marketplace contract not initialized');
+      }
+
+      this.logger.log(`Listing ERC721 IP-NFT: ${tokenAddress}:${tokenId} for ${price} wei`);
+
+      const tx = await this.erc721MarketplaceContract.listItem(
+        tokenAddress,
+        tokenId,
+        ethers.parseEther(price)
+      );
+
+      await tx.wait();
+      this.logger.log(`ERC721 IP-NFT listed successfully. Transaction: ${tx.hash}`);
+
+      return tx.hash;
+    } catch (error) {
+      this.logger.error(`Failed to list ERC721 IP-NFT: ${error.message}`);
+      throw new BadRequestException(`Failed to list ERC721 IP-NFT: ${error.message}`);
+    }
+  }
+
+  async purchaseIPNFTERC721(listingId: string, paymentAmount: string): Promise<string> {
+    try {
+      if (!this.erc721MarketplaceContract) {
+        throw new BadRequestException('ERC721 Marketplace contract not initialized');
+      }
+
+      const tx = await this.erc721MarketplaceContract.purchaseItem(listingId, {
+        value: ethers.parseEther(paymentAmount)
+      });
+
+      await tx.wait();
+      this.logger.log(`ERC721 IP-NFT purchased successfully. Transaction: ${tx.hash}`);
+
+      return tx.hash;
+    } catch (error) {
+      this.logger.error(`Failed to purchase ERC721 IP-NFT: ${error.message}`);
+      throw new BadRequestException(`Failed to purchase ERC721 IP-NFT: ${error.message}`);
+    }
+  }
+
+  async createEscrowERC721(
+    tokenAddress: string,
+    tokenId: string,
+    buyer: string,
+    completionDays: number,
+    verificationTypes: number[],
+    verificationDescriptions: string[],
+    expectedHashes: string[],
+    verificationDeadlines: number[],
+    price: string
+  ): Promise<string> {
+    try {
+      if (!this.erc721EscrowContract) {
+        throw new BadRequestException('ERC721 Escrow contract not initialized');
+      }
+
+      // Convert expected hashes to bytes32
+      const expectedHashesBytes32 = expectedHashes.map(hash => 
+        ethers.keccak256(ethers.toUtf8Bytes(hash))
+      );
+
+      const tx = await this.erc721EscrowContract.createEscrow(
+        tokenAddress,
+        tokenId,
+        buyer,
+        completionDays,
+        verificationTypes,
+        verificationDescriptions,
+        expectedHashesBytes32,
+        verificationDeadlines,
+        {
+          value: ethers.parseEther(price)
+        }
+      );
+
+      await tx.wait();
+      this.logger.log(`ERC721 Escrow created successfully. Transaction: ${tx.hash}`);
+
+      return tx.hash;
+    } catch (error) {
+      this.logger.error(`Failed to create ERC721 escrow: ${error.message}`);
+      throw new BadRequestException(`Failed to create ERC721 escrow: ${error.message}`);
+    }
+  }
+
+  // Utility method to get ERC721 contract addresses
+  getERC721ContractAddresses() {
+    return this.erc721ContractAddresses;
   }
 }

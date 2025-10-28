@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PinataSDK } from "pinata";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { ethers } from 'ethers';
 import {
   Client,
   AccountId,
@@ -49,18 +50,43 @@ interface IPNFTMetadata {
   };
 }
 
+export interface ContractAddresses {
+  ipnft: string;
+  marketplace: string;
+  escrow: string;
+}
+
+export interface ERC721MintResult {
+  tokenId: string;
+  transactionHash: string;
+  contractAddress: string;
+}
+
 @Injectable()
 export class HederaService {
   private readonly logger = new Logger(HederaService.name);
+  
+  // Hedera properties
   private client: Client;
   private operatorId: AccountId;
   private operatorKey: PrivateKey;
+  private ipnftCollectionId: string;
+  
+  // ERC721 properties
+  private provider: ethers.JsonRpcProvider;
+  private wallet: ethers.Wallet;
+  private ipnftContract: ethers.Contract;
+  private marketplaceContract: ethers.Contract;
+  private escrowContract: ethers.Contract;
+  private contractAddresses: ContractAddresses;
+  
+  // Shared properties
   private supabase: SupabaseClient;
   private pinata: PinataSDK;
-  private ipnftCollectionId: string;
 
   constructor(private configService: ConfigService) {
     this.initializeClient();
+    this.initializeERC721();
     this.initializeSupabase();
     this.initializePinata();
   }
@@ -95,6 +121,49 @@ export class HederaService {
 
     // Set the IP-NFT collection ID from config or create one
     this.ipnftCollectionId = this.configService.get<string>('IPNFT_COLLECTION_ID', '');
+  }
+
+  private initializeERC721() {
+    const rpcUrl = this.configService.get<string>('RPC_URL');
+    const privateKey = this.configService.get<string>('PRIVATE_KEY');
+
+    if (!rpcUrl || !privateKey) {
+      this.logger.warn('RPC_URL and PRIVATE_KEY not provided - ERC721 functionality will be disabled');
+      return;
+    }
+
+    try {
+      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+      this.wallet = new ethers.Wallet(privateKey, this.provider);
+      
+      this.contractAddresses = {
+        ipnft: this.configService.get<string>('IPNFT_CONTRACT_ADDRESS', ''),
+        marketplace: this.configService.get<string>('MARKETPLACE_CONTRACT_ADDRESS', ''),
+        escrow: this.configService.get<string>('ESCROW_CONTRACT_ADDRESS', ''),
+      };
+
+      // Initialize contracts if addresses are provided
+      if (this.contractAddresses.ipnft) {
+        // Note: In production, you'd import the actual ABI
+        const ipnftAbi = [
+          "function mint(address to, string memory title, string memory description, string memory ipType, string memory uri, string[] memory tags, bytes32 contentHash) public returns (uint256)",
+          "function ownerOf(uint256 tokenId) public view returns (address)",
+          "function tokenURI(uint256 tokenId) public view returns (string memory)",
+          "function totalSupply() public view returns (uint256)",
+          "event IPNFTMinted(uint256 indexed tokenId, address indexed owner, string title)"
+        ];
+        
+        this.ipnftContract = new ethers.Contract(
+          this.contractAddresses.ipnft,
+          ipnftAbi,
+          this.wallet
+        );
+      }
+
+      this.logger.log('ERC721 provider and contracts initialized');
+    } catch (error) {
+      this.logger.error(`Failed to initialize ERC721: ${error.message}`);
+    }
   }
 
   private initializeSupabase() {
@@ -497,5 +566,146 @@ export class HederaService {
       totalSupply: tokenInfo.totalSupply.toNumber(),
       treasuryAccountId: tokenInfo.treasuryAccountId?.toString() || '',
     };
+  }
+
+  // ERC721 Methods
+  async mintIPNFTERC721(
+    to: string,
+    title: string,
+    description: string,
+    ipType: string,
+    uri: string,
+    tags: string[],
+    contentHash: string
+  ): Promise<ERC721MintResult> {
+    try {
+      if (!this.ipnftContract) {
+        throw new BadRequestException('IPNFT contract not initialized');
+      }
+
+      this.logger.log(`Minting ERC721 IP-NFT: ${title} to ${to}`);
+
+      // Convert contentHash to bytes32
+      const contentHashBytes32 = ethers.keccak256(ethers.toUtf8Bytes(contentHash));
+
+      const tx = await this.ipnftContract.mint(
+        to,
+        title,
+        description,
+        ipType,
+        uri,
+        tags,
+        contentHashBytes32
+      );
+
+      const receipt = await tx.wait();
+      
+      // Extract tokenId from the event logs
+      let tokenId = '0';
+      for (const log of receipt.logs) {
+        try {
+          const parsed = this.ipnftContract.interface.parseLog(log);
+          if (parsed.name === 'IPNFTMinted') {
+            tokenId = parsed.args.tokenId.toString();
+            break;
+          }
+        } catch {
+          // Skip logs that don't match our interface
+        }
+      }
+
+      this.logger.log(`ERC721 IP-NFT minted successfully. Token ID: ${tokenId}, Transaction: ${tx.hash}`);
+
+      // Store in database
+      await this.storeERC721NFTInDatabase({
+        tokenId,
+        contractAddress: this.contractAddresses.ipnft,
+        owner: to,
+        title,
+        description,
+        ipType,
+        uri,
+        tags,
+        contentHash,
+        transactionHash: tx.hash,
+      });
+
+      return {
+        tokenId,
+        transactionHash: tx.hash,
+        contractAddress: this.contractAddresses.ipnft,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to mint ERC721 IP-NFT: ${error.message}`, error.stack);
+      throw new BadRequestException(`Failed to mint ERC721 IP-NFT: ${error.message}`);
+    }
+  }
+
+  async getERC721IPNFTInfo(tokenId: string) {
+    try {
+      if (!this.ipnftContract) {
+        throw new BadRequestException('IPNFT contract not initialized');
+      }
+
+      const [owner, tokenURI] = await Promise.all([
+        this.ipnftContract.ownerOf(tokenId),
+        this.ipnftContract.tokenURI(tokenId),
+      ]);
+
+      return {
+        tokenId,
+        owner,
+        tokenURI,
+        contractAddress: this.contractAddresses.ipnft,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get ERC721 IP-NFT info: ${error.message}`);
+      throw new BadRequestException(`Failed to get ERC721 IP-NFT info: ${error.message}`);
+    }
+  }
+
+  async getERC721TotalSupply(): Promise<number> {
+    try {
+      if (!this.ipnftContract) {
+        throw new BadRequestException('IPNFT contract not initialized');
+      }
+
+      const totalSupply = await this.ipnftContract.totalSupply();
+      return parseInt(totalSupply.toString());
+    } catch (error) {
+      this.logger.error(`Failed to get ERC721 total supply: ${error.message}`);
+      throw new BadRequestException(`Failed to get ERC721 total supply: ${error.message}`);
+    }
+  }
+
+  private async storeERC721NFTInDatabase(nftData: any) {
+    try {
+      const { data, error } = await this.supabase.from('erc721_ipnfts').insert({
+        token_id: nftData.tokenId,
+        contract_address: nftData.contractAddress,
+        owner: nftData.owner,
+        title: nftData.title,
+        description: nftData.description,
+        ip_type: nftData.ipType,
+        token_uri: nftData.uri,
+        tags: nftData.tags,
+        content_hash: nftData.contentHash,
+        transaction_hash: nftData.transactionHash,
+        created_at: new Date().toISOString(),
+      });
+
+      if (error) {
+        this.logger.error(`Failed to store ERC721 NFT in database: ${error.message}`);
+      } else {
+        this.logger.log('ERC721 NFT stored in database successfully');
+      }
+    } catch (error) {
+      this.logger.error(`Database error: ${error.message}`);
+    }
+  }
+
+  // Utility method to get contract addresses
+  getContractAddresses(): ContractAddresses {
+    return this.contractAddresses;
   }
 }

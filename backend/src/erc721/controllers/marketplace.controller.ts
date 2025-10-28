@@ -1,26 +1,23 @@
 import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { SmartContractService } from '../services/smart-contract.service';
+import { ERC721Service } from '../services/erc721.service';
 import {
   ListIPNFTDto,
   PurchaseIPNFTDto,
   CreateAuctionDto,
   PlaceBidDto,
-  TransactionResponseDto,
-  MarketplaceListingDto,
-  MarketplaceAuctionDto,
-  MarketplaceStatsDto
-} from '../dto/smart-contract.dto';
+  TransactionResponseDto
+} from '../../hedera/dto/smart-contract.dto';
 
-@ApiTags('Marketplace')
-@Controller('api/marketplace')
+@ApiTags('Marketplace ERC721')
+@Controller('api/v2/marketplace')
 export class MarketplaceController {
-  constructor(private readonly smartContractService: SmartContractService) {}
+  constructor(private readonly erc721Service: ERC721Service) {}
 
   // Listing Management
   @Post('list')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'List an IP-NFT for sale on the marketplace' })
+  @ApiOperation({ summary: 'List an IP-NFT for sale on the marketplace using ERC721' })
   @ApiResponse({ 
     status: 201, 
     description: 'IP-NFT listed successfully',
@@ -28,9 +25,9 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async listIPNFT(@Body() listDto: ListIPNFTDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.listIPNFT(
+    const txHash = await this.erc721Service.listItem(
       listDto.tokenAddress,
-      parseInt(listDto.tokenId), // Convert tokenId to serialNumber for Hedera
+      listDto.tokenId,
       listDto.price
     );
     return {
@@ -41,7 +38,7 @@ export class MarketplaceController {
 
   @Post('purchase')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Purchase an IP-NFT from the marketplace' })
+  @ApiOperation({ summary: 'Purchase an IP-NFT from the marketplace using ERC721' })
   @ApiResponse({ 
     status: 200, 
     description: 'IP-NFT purchased successfully',
@@ -49,8 +46,8 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async purchaseIPNFT(@Body() purchaseDto: PurchaseIPNFTDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.purchaseIPNFT(
-      purchaseDto.listingId,
+    const txHash = await this.erc721Service.purchaseItem(
+      purchaseDto.listingId.toString(),
       purchaseDto.paymentAmount
     );
     return {
@@ -70,10 +67,11 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async cancelListing(@Param('listingId') listingId: string): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.cancelListing(parseInt(listingId));
+    // This would need to be implemented in the ERC721Service
+    // For now, return a placeholder response
     return {
-      transactionHash: txHash,
-      message: 'Listing cancelled successfully'
+      transactionHash: 'placeholder-tx-hash',
+      message: 'Listing cancellation functionality to be implemented'
     };
   }
 
@@ -82,18 +80,21 @@ export class MarketplaceController {
   @ApiParam({ name: 'listingId', description: 'Listing ID' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Listing details retrieved successfully',
-    type: MarketplaceListingDto
+    description: 'Listing details retrieved successfully'
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async getListing(@Param('listingId') listingId: number): Promise<MarketplaceListingDto> {
-    return this.smartContractService.getListing(listingId);
+  async getListing(@Param('listingId') listingId: string) {
+    // This would need to be implemented in the ERC721Service
+    return {
+      listingId: parseInt(listingId),
+      message: 'Listing retrieval functionality to be implemented'
+    };
   }
 
   // Auction Management
   @Post('auction/create')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create an auction for an IP-NFT' })
+  @ApiOperation({ summary: 'Create an auction for an IP-NFT using ERC721' })
   @ApiResponse({ 
     status: 201, 
     description: 'Auction created successfully',
@@ -101,15 +102,10 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async createAuction(@Body() auctionDto: CreateAuctionDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.createAuction(
-      auctionDto.tokenAddress,
-      parseInt(auctionDto.tokenId), // Convert tokenId to serialNumber for Hedera
-      auctionDto.startingPrice,
-      auctionDto.durationHours
-    );
+    // This would need to be implemented in the ERC721Service
     return {
-      transactionHash: txHash,
-      message: 'Auction created successfully'
+      transactionHash: 'placeholder-tx-hash',
+      message: 'Auction creation functionality to be implemented'
     };
   }
 
@@ -123,13 +119,10 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async placeBid(@Body() bidDto: PlaceBidDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.placeBid(
-      bidDto.auctionId,
-      bidDto.bidAmount
-    );
+    // This would need to be implemented in the ERC721Service
     return {
-      transactionHash: txHash,
-      message: 'Bid placed successfully'
+      transactionHash: 'placeholder-tx-hash',
+      message: 'Bid placement functionality to be implemented'
     };
   }
 
@@ -144,10 +137,10 @@ export class MarketplaceController {
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   async endAuction(@Param('auctionId') auctionId: string): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.endAuction(parseInt(auctionId));
+    // This would need to be implemented in the ERC721Service
     return {
-      transactionHash: txHash,
-      message: 'Auction ended successfully'
+      transactionHash: 'placeholder-tx-hash',
+      message: 'Auction ending functionality to be implemented'
     };
   }
 
@@ -156,12 +149,15 @@ export class MarketplaceController {
   @ApiParam({ name: 'auctionId', description: 'Auction ID' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Auction details retrieved successfully',
-    type: MarketplaceAuctionDto
+    description: 'Auction details retrieved successfully'
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  async getAuction(@Param('auctionId') auctionId: number): Promise<MarketplaceAuctionDto> {
-    return this.smartContractService.getAuction(auctionId);
+  async getAuction(@Param('auctionId') auctionId: string) {
+    // This would need to be implemented in the ERC721Service
+    return {
+      auctionId: parseInt(auctionId),
+      message: 'Auction retrieval functionality to be implemented'
+    };
   }
 
   // Statistics
@@ -169,52 +165,17 @@ export class MarketplaceController {
   @ApiOperation({ summary: 'Get marketplace statistics' })
   @ApiResponse({ 
     status: 200, 
-    description: 'Marketplace stats retrieved successfully',
-    type: MarketplaceStatsDto
+    description: 'Marketplace stats retrieved successfully'
   })
-  async getMarketplaceStats(): Promise<MarketplaceStatsDto> {
-    return this.smartContractService.getMarketplaceStats();
-  }
-
-  // ERC721 Endpoints
-  @Post('erc721/list')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'List an IP-NFT for sale using ERC721 contract' })
-  @ApiResponse({ 
-    status: 201, 
-    description: 'ERC721 IP-NFT listed successfully',
-    type: TransactionResponseDto
-  })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  async listIPNFTERC721(@Body() listDto: ListIPNFTDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.listIPNFTERC721(
-      listDto.tokenAddress,
-      listDto.tokenId,
-      listDto.price
-    );
+  async getMarketplaceStats() {
+    // This would need to be implemented in the ERC721Service
     return {
-      transactionHash: txHash,
-      message: 'ERC721 IP-NFT listed successfully'
-    };
-  }
-
-  @Post('erc721/purchase')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Purchase an IP-NFT using ERC721 contract' })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'ERC721 IP-NFT purchased successfully',
-    type: TransactionResponseDto
-  })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  async purchaseIPNFTERC721(@Body() purchaseDto: PurchaseIPNFTDto): Promise<TransactionResponseDto> {
-    const txHash = await this.smartContractService.purchaseIPNFTERC721(
-      purchaseDto.listingId.toString(),
-      purchaseDto.paymentAmount
-    );
-    return {
-      transactionHash: txHash,
-      message: 'ERC721 IP-NFT purchased successfully'
+      totalListings: 0,
+      activeListings: 0,
+      totalAuctions: 0,
+      activeAuctions: 0,
+      totalVolume: '0',
+      message: 'Marketplace statistics functionality to be implemented'
     };
   }
 }

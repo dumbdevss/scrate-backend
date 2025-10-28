@@ -3,17 +3,15 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import {HederaTokenService} from "@hashgraph/smart-contracts/contracts/system-contracts/hedera-token-service/HederaTokenService.sol";
-import {IHederaTokenService} from "@hashgraph/smart-contracts/contracts/system-contracts/hedera-token-service/IHederaTokenService.sol";
-import {HederaResponseCodes} from "@hashgraph/smart-contracts/contracts/system-contracts/HederaResponseCodes.sol";
-import {KeyHelper} from "@hashgraph/smart-contracts/contracts/system-contracts/hedera-token-service/KeyHelper.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "./ipNft.sol";
 
 /**
  * @title IPNFTEscrow
  * @dev Escrow contract for Real World Asset (RWA) IP-NFTs with verification system
  * Allows secure transactions with verification requirements from both parties
  */
-contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard {
+contract IPNFTEscrow is Ownable, ReentrancyGuard {
     uint256 private _escrowIds;
     
     enum EscrowStatus {
@@ -47,7 +45,7 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
     struct EscrowAgreement {
         uint256 escrowId;
         address tokenAddress;
-        int64 serialNumber;
+        uint256 tokenId;
         address seller;
         address buyer;
         uint256 price;
@@ -61,7 +59,7 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
     mapping(uint256 => EscrowAgreement) public escrows;
     
     // Mapping from token to active escrow
-    mapping(address => mapping(int64 => uint256)) public tokenToEscrow;
+    mapping(address => mapping(uint256 => uint256)) public tokenToEscrow;
     
     // Authorized verifiers for third-party verification
     mapping(address => bool) public authorizedVerifiers;
@@ -84,7 +82,7 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
     event EscrowCreated(
         uint256 indexed escrowId,
         address indexed tokenAddress,
-        int64 indexed serialNumber,
+        uint256 indexed tokenId,
         address seller,
         address buyer,
         uint256 price
@@ -158,7 +156,7 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
      */
     function createEscrow(
         address tokenAddress,
-        int64 serialNumber,
+        uint256 tokenId,
         address buyer,
         uint256 completionDays,
         VerificationType[] calldata verificationTypes,
@@ -166,13 +164,11 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
         bytes32[] calldata expectedHashes,
         uint256[] calldata verificationDeadlines
     ) external payable nonReentrant {
-        (int responseCode, IHederaTokenService.NonFungibleTokenInfo memory info) = 
-            HederaTokenService.getNonFungibleTokenInfo(tokenAddress, serialNumber);
-        require(responseCode == HederaResponseCodes.SUCCESS, "Failed to get NFT info");
-        require(info.ownerId == msg.sender, "Not token owner");
+        IERC721 nftContract = IERC721(tokenAddress);
+        require(nftContract.ownerOf(tokenId) == msg.sender, "Not token owner");
         require(buyer != address(0) && buyer != msg.sender, "Invalid buyer");
         require(msg.value > 0, "Price must be greater than 0");
-        require(tokenToEscrow[tokenAddress][serialNumber] == 0, "Token already in escrow");
+        require(tokenToEscrow[tokenAddress][tokenId] == 0, "Token already in escrow");
         require(verificationTypes.length == verificationDescriptions.length, "Mismatched arrays");
         require(verificationTypes.length == expectedHashes.length, "Mismatched arrays");
         require(verificationTypes.length == verificationDeadlines.length, "Mismatched arrays");
@@ -182,8 +178,7 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
         uint256 price = msg.value - escrowFee;
         
         // Transfer NFT to escrow
-        int response = HederaTokenService.transferNFT(tokenAddress, msg.sender, address(this), serialNumber);
-        require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
+        nftContract.transferFrom(msg.sender, address(this), tokenId);
         
         _escrowIds++;
         uint256 escrowId = _escrowIds;
@@ -191,7 +186,7 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
         EscrowAgreement storage escrow = escrows[escrowId];
         escrow.escrowId = escrowId;
         escrow.tokenAddress = tokenAddress;
-        escrow.serialNumber = serialNumber;
+        escrow.tokenId = tokenId;
         escrow.seller = msg.sender;
         escrow.buyer = buyer;
         escrow.price = price;
@@ -212,9 +207,9 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
             }));
         }
         
-        tokenToEscrow[tokenAddress][serialNumber] = escrowId;
+        tokenToEscrow[tokenAddress][tokenId] = escrowId;
         
-        emit EscrowCreated(escrowId, tokenAddress, serialNumber, msg.sender, buyer, price);
+        emit EscrowCreated(escrowId, tokenAddress, tokenId, msg.sender, buyer, price);
     }
     
     /**
@@ -288,16 +283,10 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
         );
         
         escrow.status = EscrowStatus.Completed;
-        tokenToEscrow[escrow.tokenAddress][escrow.serialNumber] = 0;
+        tokenToEscrow[escrow.tokenAddress][escrow.tokenId] = 0;
         
         // Transfer NFT to buyer
-        int response = HederaTokenService.transferNFT(
-            escrow.tokenAddress,
-            address(this),
-            escrow.buyer,
-            escrow.serialNumber
-        );
-        require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
+        IERC721(escrow.tokenAddress).transferFrom(address(this), escrow.buyer, escrow.tokenId);
         
         // Transfer payment to seller
         payable(escrow.seller).transfer(escrow.price);
@@ -339,28 +328,16 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
         uint256 disputeFee = (escrow.price * disputeResolutionFee) / 10000;
         uint256 payoutAmount = escrow.price - disputeFee;
         
-        tokenToEscrow[escrow.tokenAddress][escrow.serialNumber] = 0;
+        tokenToEscrow[escrow.tokenAddress][escrow.tokenId] = 0;
         
         if (winner == escrow.buyer) {
             // Buyer wins - gets NFT and refund
-            int response = HederaTokenService.transferNFT(
-                escrow.tokenAddress,
-                address(this),
-                escrow.buyer,
-                escrow.serialNumber
-            );
-            require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
+            IERC721(escrow.tokenAddress).transferFrom(address(this), escrow.buyer, escrow.tokenId);
             payable(escrow.buyer).transfer(payoutAmount);
             escrow.status = EscrowStatus.Refunded;
         } else {
             // Seller wins - gets payment, NFT returned
-            int response = HederaTokenService.transferNFT(
-                escrow.tokenAddress,
-                address(this),
-                escrow.seller,
-                escrow.serialNumber
-            );
-            require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
+            IERC721(escrow.tokenAddress).transferFrom(address(this), escrow.seller, escrow.tokenId);
             payable(escrow.seller).transfer(payoutAmount);
             escrow.status = EscrowStatus.Completed;
         }
@@ -395,16 +372,10 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
         require(!hasCompletedVerifications, "Cannot cancel with completed verifications");
         
         escrow.status = EscrowStatus.Cancelled;
-        tokenToEscrow[escrow.tokenAddress][escrow.serialNumber] = 0;
+        tokenToEscrow[escrow.tokenAddress][escrow.tokenId] = 0;
         
         // Return NFT to seller
-        int response = HederaTokenService.transferNFT(
-            escrow.tokenAddress,
-            address(this),
-            escrow.seller,
-            escrow.serialNumber
-        );
-        require(response == HederaResponseCodes.SUCCESS, "Transfer failed");
+        IERC721(escrow.tokenAddress).transferFrom(address(this), escrow.seller, escrow.tokenId);
         
         // Refund buyer (minus escrow fee for processing)
         uint256 refundAmount = escrow.price;
@@ -447,10 +418,11 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
     function getEscrow(uint256 escrowId) external view returns (
         uint256 id,
         address tokenAddress,
-        int64 serialNumber,
+        uint256 tokenId,
         address seller,
         address buyer,
         uint256 price,
+        uint256 escrowFee,
         EscrowStatus status,
         uint256 createdAt,
         uint256 completionDeadline
@@ -459,10 +431,11 @@ contract IPNFTEscrow is HederaTokenService, KeyHelper, Ownable, ReentrancyGuard 
         return (
             escrow.escrowId,
             escrow.tokenAddress,
-            escrow.serialNumber,
+            escrow.tokenId,
             escrow.seller,
             escrow.buyer,
             escrow.price,
+            escrow.escrowFee,
             escrow.status,
             escrow.createdAt,
             escrow.completionDeadline

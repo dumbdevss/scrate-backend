@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Param, HttpCode, HttpStatus, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { HederaService } from '../services/hedera.service';
+import { HederaService, ERC721MintResult } from '../services/hedera.service';
 import { 
   MintIPNFTDto, 
   IPNFTAnalyticsDto
@@ -86,6 +86,81 @@ export class HederaController {
     return { 
       valid: isValid,
       message: isValid ? 'Metadata is valid' : 'Metadata validation failed'
+    };
+  }
+
+  // ERC721 Endpoints
+  @Post('erc721/mint')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Mint a new IP-NFT using ERC721 contract' })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'ERC721 IP-NFT minted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        tokenId: { type: 'string' },
+        transactionHash: { type: 'string' },
+        contractAddress: { type: 'string' }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  async mintIPNFTERC721(@Body() mintDto: MintIPNFTDto): Promise<ERC721MintResult> {
+    // Create metadata object and upload to IPFS
+    const metadata = {
+      name: mintDto.name,
+      description: mintDto.description,
+      image: mintDto.image,
+      external_url: mintDto.external_url,
+      properties: {
+        type: 'IP-NFT',
+        agreements: mintDto.agreements,
+        project_details: mintDto.project_details,
+      },
+    };
+
+    const metadataUrl = await this.hederaService.uploadNFTMetadata(metadata);
+
+    return this.hederaService.mintIPNFTERC721(
+      mintDto.recipient,
+      mintDto.name,
+      mintDto.description,
+      mintDto.project_details.industry, // Using industry as ipType
+      metadataUrl,
+      [mintDto.project_details.industry, mintDto.project_details.topic], // Simple tags
+      mintDto.name + mintDto.description // Simple content hash
+    );
+  }
+
+  @Get('erc721/:tokenId')
+  @ApiOperation({ summary: 'Get information about a specific ERC721 IP-NFT' })
+  @ApiParam({ name: 'tokenId', description: 'Token ID of the ERC721 IP-NFT' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'ERC721 IP-NFT information retrieved successfully'
+  })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  async getERC721IPNFTInfo(@Param('tokenId') tokenId: string) {
+    return this.hederaService.getERC721IPNFTInfo(tokenId);
+  }
+
+  @Get('erc721/collection/info')
+  @ApiOperation({ summary: 'Get information about the ERC721 IP-NFT collection' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'ERC721 collection information retrieved successfully'
+  })
+  async getERC721CollectionInfo() {
+    const totalSupply = await this.hederaService.getERC721TotalSupply();
+    const contractAddresses = this.hederaService.getContractAddresses();
+    
+    return {
+      contractAddress: contractAddresses.ipnft,
+      totalSupply,
+      name: 'Intellectual Property NFTs',
+      symbol: 'IPNFT',
+      type: 'ERC721',
     };
   }
 }
