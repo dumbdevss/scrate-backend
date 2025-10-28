@@ -1,174 +1,202 @@
-# Hedera IPNFT Service
+# IP-NFT Platform Backend
 
-A NestJS-based service for creating and managing IP-based NFTs (IPNFTs) on the Hedera network using the Hedera Token Service (HTS).
+A comprehensive NestJS backend for the IP-NFT platform that integrates with Hedera Hashgraph smart contracts and Supabase for data logging and analytics.
 
-## Features
+## 🚀 Features
 
-- **Create NFT Collections**: Create new NFT collections on Hedera with customizable properties
-- **Mint IPNFTs**: Mint NFTs with IPFS metadata and custom attributes
-- **Token Information**: Retrieve detailed information about collections and individual NFTs
-- **Hedera Integration**: Full integration with Hedera Token Service using the official SDK
-- **API Documentation**: Swagger/OpenAPI documentation for all endpoints
+### Core Functionality
+- **Hedera Integration**: Direct integration with Hedera Token Service (HTS) and smart contracts
+- **Smart Contract Support**: Full support for IP-NFT, Marketplace, and Escrow contracts
+- **Supabase Integration**: Complete data logging and analytics with PostgreSQL
+- **Real-time Analytics**: Track mints, transactions, and platform metrics
+- **RESTful API**: Comprehensive API endpoints with Swagger documentation
 
-## Prerequisites
+### Smart Contract Integration
+- **IP-NFT Contract**: Mint, transfer, and manage intellectual property NFTs
+- **Marketplace Contract**: List items, create auctions, handle sales
+- **Escrow Contract**: Secure transactions with verification requirements
 
-- Node.js (v16 or higher)
-- npm or yarn
-- Hedera testnet/mainnet account with HBAR balance
-- IPFS node or service for storing NFT metadata (optional)
+### Data Logging & Analytics
+- **Transaction Tracking**: Log every marketplace and escrow transaction
+- **IP-NFT Registry**: Complete database of all minted IP-NFTs
+- **Analytics Dashboard**: Real-time metrics and historical data
+- **Performance Monitoring**: Track gas usage, transaction success rates
 
-## Installation
+## 🏗️ Architecture
 
-1. Clone the repository and install dependencies:
+```
+backend/
+├── src/
+│   ├── modules/
+│   │   ├── hedera/           # Hedera SDK integration
+│   │   ├── supabase/         # Database operations
+│   │   ├── ipnft/           # IP-NFT management
+│   │   ├── marketplace/      # Marketplace operations
+│   │   ├── escrow/          # Escrow management
+│   │   └── analytics/       # Analytics & metrics
+│   ├── config/              # Configuration management
+│   ├── app.module.ts        # Main application module
+│   └── main.ts             # Application entry point
+├── database/
+│   └── supabase-schema.sql  # Database schema
+└── package.json            # Dependencies
+```
+
+## 📋 Prerequisites
+
+- Node.js 18+ and npm/yarn
+- Hedera Testnet/Mainnet account with HBAR
+- Supabase project setup
+- Deployed smart contracts (IP-NFT, Marketplace, Escrow)
+
+## 🛠️ Installation
+
+### 1. Install Dependencies
 ```bash
+cd backend
 npm install
 ```
 
-2. Copy the environment configuration:
+### 2. Environment Configuration
 ```bash
 cp .env.example .env
 ```
 
-3. Configure your Hedera credentials in `.env`:
+Edit `.env` with your configuration:
+
 ```env
-HEDERA_OPERATOR_ID=0.0.YOUR_ACCOUNT_ID
-HEDERA_OPERATOR_KEY=YOUR_PRIVATE_KEY_HERE
+# Hedera Configuration
 HEDERA_NETWORK=testnet
-PORT=3000
+HEDERA_OPERATOR_ID=0.0.123456
+HEDERA_OPERATOR_KEY=302e020100300506032b657004220420...
+
+# Smart Contract Addresses
+IPNFT_CONTRACT_ADDRESS=0x...
+MARKETPLACE_CONTRACT_ADDRESS=0x...
+ESCROW_CONTRACT_ADDRESS=0x...
+
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_KEY=your-service-key
 ```
 
-## Getting Started
-
-### Setting up Hedera Account
-
-1. Create a Hedera account on [Hedera Portal](https://portal.hedera.com/)
-2. For testnet: Get free HBAR from the [Hedera faucet](https://portal.hedera.com/faucet)
-3. Note your Account ID and Private Key for configuration
-
-### Running the Application
-
+### 3. Database Setup
+1. Create a new Supabase project
+2. Run the SQL schema in your Supabase SQL editor:
 ```bash
-# Development mode
+# Copy the contents of backend/database/supabase-schema.sql
+# and execute in Supabase SQL editor
+```
+
+### 4. Start the Application
+```bash
 npm run start:dev
-
-# Production mode
-npm run build
-npm run start:prod
 ```
 
-The service will be available at:
-- API: `http://localhost:3000`
-- Documentation: `http://localhost:3000/api`
+The API will be available at `http://localhost:3000`
 
-## API Endpoints
+## 📚 API Documentation
 
-### Create Collection
-```http
-POST /hedera/collections
-Content-Type: application/json
+Visit `http://localhost:3000/api` for interactive Swagger documentation.
 
-{
-  "name": "My IPNFT Collection",
-  "symbol": "IPNFT",
-  "description": "A collection of IP-based NFTs",
-  "maxSupply": 1000
+### Key Endpoints
+
+#### IP-NFT Management
+- `POST /api/v1/ipnft/mint` - Mint new IP-NFT
+- `GET /api/v1/ipnft/:tokenId` - Get IP-NFT details
+- `GET /api/v1/ipnft/creator/:address` - Get IP-NFTs by creator
+- `GET /api/v1/ipnft/owner/:address` - Get IP-NFTs by owner
+
+#### Marketplace Operations
+- `POST /api/v1/marketplace/list` - List NFT for sale
+- `POST /api/v1/marketplace/auction` - Create auction
+- `POST /api/v1/marketplace/buy/:listingId` - Buy NFT
+- `GET /api/v1/marketplace/transactions` - Get marketplace transactions
+
+#### Escrow Management
+- `POST /api/v1/escrow/create` - Create escrow agreement
+- `POST /api/v1/escrow/:escrowId/verify` - Submit verification
+- `POST /api/v1/escrow/:escrowId/complete` - Complete escrow
+
+#### Analytics
+- `GET /api/v1/analytics/overview` - Overall platform analytics
+- `GET /api/v1/analytics/ipnfts` - IP-NFT specific metrics
+- `GET /api/v1/analytics/marketplace` - Marketplace analytics
+- `GET /api/v1/analytics/escrow` - Escrow analytics
+
+## 🔧 Configuration
+
+### Hedera Setup
+1. Create account on [Hedera Portal](https://portal.hedera.com/)
+2. Fund account with HBAR for operations
+3. Export account ID and private key
+
+### Smart Contract Deployment
+Ensure your smart contracts are deployed and addresses are configured:
+- IP-NFT Contract: Handles minting and metadata
+- Marketplace Contract: Manages listings and auctions
+- Escrow Contract: Handles secure transactions
+
+### Supabase Configuration
+1. Create new Supabase project
+2. Run the provided schema
+3. Configure Row Level Security policies
+4. Get project URL and API keys
+
+## 🔐 Security Features
+
+- **Input Validation**: Class-validator for all DTOs
+- **Rate Limiting**: Protection against API abuse
+- **CORS Configuration**: Secure cross-origin requests
+- **Environment Variables**: Sensitive data protection
+- **Database Security**: Row Level Security with Supabase
+
+## 📊 Data Models
+
+### IP-NFT Record
+```typescript
+interface IPNFTRecord {
+  token_id: string;
+  title: string;
+  description: string;
+  ip_type: string;
+  creator_address: string;
+  owner_address: string;
+  content_hash: string;
+  metadata_bytes: string;
+  // ... additional fields
 }
 ```
 
-### Mint IPNFT
-```http
-POST /hedera/nfts/mint
-Content-Type: application/json
-
-{
-  "tokenId": "0.0.123456",
-  "ipfsHash": "QmYourIPFSHashHere",
-  "name": "My First IPNFT",
-  "description": "An innovative IP-based NFT",
-  "imageUrl": "https://ipfs.io/ipfs/QmImageHash",
-  "attributes": {
-    "trait_type": "Rarity",
-    "value": "Rare"
-  }
+### Marketplace Transaction
+```typescript
+interface MarketplaceTransaction {
+  transaction_type: 'listing' | 'sale' | 'auction_created' | 'bid_placed' | 'auction_ended';
+  token_id: string;
+  seller_address: string;
+  buyer_address?: string;
+  price: string;
+  transaction_hash: string;
+  // ... additional fields
 }
 ```
 
-### Get Collection Info
-```http
-GET /hedera/collections/{tokenId}
-```
-
-### Get NFT Info
-```http
-GET /hedera/nfts/{tokenId}/{serialNumber}
-```
-
-## Response Examples
-
-### Collection Creation Response
-```json
-{
-  "tokenId": "0.0.123456",
-  "tokenAddress": "0.0.123456",
-  "name": "My IPNFT Collection",
-  "symbol": "IPNFT",
-  "totalSupply": 0,
-  "maxSupply": 1000,
-  "treasuryAccountId": "0.0.12345"
+### Escrow Transaction
+```typescript
+interface EscrowTransaction {
+  escrow_id: string;
+  transaction_type: 'created' | 'verification_submitted' | 'completed' | 'disputed';
+  token_id: string;
+  seller_address: string;
+  buyer_address: string;
+  price: string;
+  // ... additional fields
 }
 ```
 
-### NFT Minting Response
-```json
-{
-  "tokenId": "0.0.123456",
-  "serialNumbers": [1],
-  "transactionId": "0.0.12345@1234567890.123456789",
-  "nftInfo": [
-    {
-      "tokenId": "0.0.123456",
-      "serialNumber": 1,
-      "accountId": "0.0.12345",
-      "metadata": "{\"name\":\"My First IPNFT\",\"ipfsHash\":\"QmYourIPFSHashHere\"}",
-      "createdTimestamp": "2024-01-01T00:00:00.000Z"
-    }
-  ]
-}
-```
+## 🧪 Testing
 
-## IPNFT Metadata Structure
-
-The service stores NFT metadata in the following format:
-
-```json
-{
-  "name": "NFT Name",
-  "description": "NFT Description",
-  "image": "https://ipfs.io/ipfs/QmImageHash",
-  "ipfsHash": "QmMetadataHash",
-  "attributes": {
-    "trait_type": "value",
-    "another_trait": "another_value"
-  }
-}
-```
-
-## Development
-
-### Project Structure
-```
-src/
-├── hedera/
-│   ├── controllers/     # API controllers
-│   ├── services/        # Business logic
-│   ├── dto/            # Data transfer objects
-│   ├── interfaces/     # TypeScript interfaces
-│   └── hedera.module.ts
-├── app.module.ts
-└── main.ts
-```
-
-### Running Tests
 ```bash
 # Unit tests
 npm run test
@@ -180,63 +208,79 @@ npm run test:e2e
 npm run test:cov
 ```
 
-### Code Quality
-```bash
-# Linting
-npm run lint
+## 📈 Analytics Features
 
-# Formatting
-npm run format
+The platform tracks comprehensive metrics:
+
+- **IP-NFT Metrics**: Total mints, by type, by creator
+- **Marketplace Activity**: Sales volume, conversion rates, active listings
+- **Escrow Performance**: Completion rates, dispute resolution
+- **User Analytics**: Active users, transaction patterns
+- **Historical Data**: Daily snapshots for trend analysis
+
+## 🚀 Deployment
+
+### Production Build
+```bash
+npm run build
+npm run start:prod
 ```
 
-## Configuration
+### Environment Variables for Production
+Ensure all production environment variables are set:
+- Hedera mainnet configuration
+- Production Supabase instance
+- Deployed smart contract addresses
+- Security configurations
 
-### Environment Variables
+## 🤝 API Usage Examples
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `HEDERA_OPERATOR_ID` | Your Hedera account ID | Required |
-| `HEDERA_OPERATOR_KEY` | Your Hedera private key | Required |
-| `HEDERA_NETWORK` | Hedera network (testnet/mainnet/previewnet) | testnet |
-| `PORT` | Application port | 3000 |
+### Mint an IP-NFT
+```bash
+curl -X POST http://localhost:3000/api/v1/ipnft/mint \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Revolutionary AI Algorithm",
+    "description": "Breakthrough ML algorithm",
+    "ipType": "Patent",
+    "tags": ["AI", "ML"],
+    "contentHash": "bafkreicrhuxfzrydht6tmd4kyy6pkbhspqthswg6xbiqlaztmf774ojxhq",
+    "metadataBytes": "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG",
+    "toAddress": "0x742d35Cc6634C0532925a3b8D6Ac6E1e9F1F1234"
+  }'
+```
 
-### Network Configuration
+### List NFT for Sale
+```bash
+curl -X POST http://localhost:3000/api/v1/marketplace/list \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tokenAddress": "0x...",
+    "tokenId": "1",
+    "price": "1.5",
+    "sellerAddress": "0x742d35Cc6634C0532925a3b8D6Ac6E1e9F1F1234"
+  }'
+```
 
-- **Testnet**: Free for development and testing
-- **Previewnet**: Preview of upcoming features
-- **Mainnet**: Production network (requires real HBAR)
+## 🔮 Future Enhancements
 
-## Error Handling
+- **Event Listeners**: Real-time blockchain event monitoring
+- **Caching Layer**: Redis integration for performance
+- **Batch Operations**: Bulk minting and transaction processing
+- **Advanced Analytics**: Machine learning insights
+- **Mobile SDK**: React Native integration
 
-The service includes comprehensive error handling:
+## 📄 License
 
-- **Validation Errors**: Invalid input parameters
-- **Hedera Errors**: Network or transaction failures
-- **Authentication Errors**: Invalid credentials
-- **Rate Limiting**: Hedera network rate limits
+This project is licensed under the MIT License.
 
-## Security Considerations
+## 🆘 Support
 
-- Store private keys securely (use environment variables)
-- Never commit private keys to version control
-- Use testnet for development and testing
-- Implement proper access controls for production
+For support and questions:
+- Check the API documentation at `/api` endpoint
+- Review the database schema in `database/supabase-schema.sql`
+- Examine the smart contract integration in `src/modules/hedera/`
 
-## Contributing
+## 🏷️ Tags
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Support
-
-For issues and questions:
-- Check the [Hedera documentation](https://docs.hedera.com/)
-- Review the [Hedera SDK documentation](https://github.com/hashgraph/hedera-sdk-js)
-- Open an issue in this repository
+`hedera` `hashgraph` `nestjs` `supabase` `ipnft` `blockchain` `smart-contracts` `analytics`
