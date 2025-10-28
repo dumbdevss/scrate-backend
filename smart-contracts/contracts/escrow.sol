@@ -66,7 +66,6 @@ contract IPNFTEscrow is Ownable, ReentrancyGuard {
     
     // Separate mappings for data that was in struct
     mapping(uint256 => VerificationRequirement[]) public escrowVerificationRequirements;
-    mapping(uint256 => mapping(address => bool)) public escrowHasVerified;
     mapping(uint256 => string[]) public escrowSellerEvidence;
     mapping(uint256 => string[]) public escrowBuyerComments;
     
@@ -157,16 +156,16 @@ contract IPNFTEscrow is Ownable, ReentrancyGuard {
     function createEscrow(
         address tokenAddress,
         uint256 tokenId,
-        address buyer,
+        address seller,
         uint256 completionDays,
         VerificationType[] calldata verificationTypes,
         string[] calldata verificationDescriptions,
         bytes32[] calldata expectedHashes,
         uint256[] calldata verificationDeadlines
     ) external payable nonReentrant {
-        IERC721 nftContract = IERC721(tokenAddress);
-        require(nftContract.ownerOf(tokenId) == msg.sender, "Not token owner");
-        require(buyer != address(0) && buyer != msg.sender, "Invalid buyer");
+        require(IPNFT(tokenAddress).ownerOf(tokenId) == seller, "Seller not token owner");
+        require(IPNFT(tokenAddress).isMarketplaceApproved(address(this), tokenId), "Escrow not approved");
+        require(msg.sender != address(0) && msg.sender != seller, "Invalid buyer");
         require(msg.value > 0, "Price must be greater than 0");
         require(tokenToEscrow[tokenAddress][tokenId] == 0, "Token already in escrow");
         require(verificationTypes.length == verificationDescriptions.length, "Mismatched arrays");
@@ -178,7 +177,7 @@ contract IPNFTEscrow is Ownable, ReentrancyGuard {
         uint256 price = msg.value - escrowFee;
         
         // Transfer NFT to escrow
-        nftContract.transferFrom(msg.sender, address(this), tokenId);
+        require(IPNFT(tokenAddress).transferNFT(seller, address(this), tokenId), "Transfer failed");
         
         _escrowIds++;
         uint256 escrowId = _escrowIds;
@@ -187,8 +186,8 @@ contract IPNFTEscrow is Ownable, ReentrancyGuard {
         escrow.escrowId = escrowId;
         escrow.tokenAddress = tokenAddress;
         escrow.tokenId = tokenId;
-        escrow.seller = msg.sender;
-        escrow.buyer = buyer;
+        escrow.seller = seller;
+        escrow.buyer = msg.sender;
         escrow.price = price;
         escrow.escrowFee = escrowFee;
         escrow.status = EscrowStatus.Active;
@@ -209,7 +208,7 @@ contract IPNFTEscrow is Ownable, ReentrancyGuard {
         
         tokenToEscrow[tokenAddress][tokenId] = escrowId;
         
-        emit EscrowCreated(escrowId, tokenAddress, tokenId, msg.sender, buyer, price);
+        emit EscrowCreated(escrowId, tokenAddress, tokenId, seller, msg.sender, price);
     }
     
     /**
@@ -281,12 +280,13 @@ contract IPNFTEscrow is Ownable, ReentrancyGuard {
             msg.sender == escrow.buyer || msg.sender == escrow.seller,
             "Not authorized"
         );
+        require(block.timestamp <= escrow.completionDeadline, "Completion deadline passed");
         
         escrow.status = EscrowStatus.Completed;
         tokenToEscrow[escrow.tokenAddress][escrow.tokenId] = 0;
         
         // Transfer NFT to buyer
-        IERC721(escrow.tokenAddress).transferFrom(address(this), escrow.buyer, escrow.tokenId);
+        require(IPNFT(escrow.tokenAddress).transferNFT(address(this), escrow.buyer, escrow.tokenId), "Transfer failed");
         
         // Transfer payment to seller
         payable(escrow.seller).transfer(escrow.price);
@@ -332,12 +332,12 @@ contract IPNFTEscrow is Ownable, ReentrancyGuard {
         
         if (winner == escrow.buyer) {
             // Buyer wins - gets NFT and refund
-            IERC721(escrow.tokenAddress).transferFrom(address(this), escrow.buyer, escrow.tokenId);
+            require(IPNFT(escrow.tokenAddress).transferNFT(address(this), escrow.buyer, escrow.tokenId), "Transfer failed");
             payable(escrow.buyer).transfer(payoutAmount);
             escrow.status = EscrowStatus.Refunded;
         } else {
             // Seller wins - gets payment, NFT returned
-            IERC721(escrow.tokenAddress).transferFrom(address(this), escrow.seller, escrow.tokenId);
+            require(IPNFT(escrow.tokenAddress).transferNFT(address(this), escrow.seller, escrow.tokenId), "Transfer failed");
             payable(escrow.seller).transfer(payoutAmount);
             escrow.status = EscrowStatus.Completed;
         }
@@ -375,7 +375,7 @@ contract IPNFTEscrow is Ownable, ReentrancyGuard {
         tokenToEscrow[escrow.tokenAddress][escrow.tokenId] = 0;
         
         // Return NFT to seller
-        IERC721(escrow.tokenAddress).transferFrom(address(this), escrow.seller, escrow.tokenId);
+        require(IPNFT(escrow.tokenAddress).transferNFT(address(this), escrow.seller, escrow.tokenId), "Transfer failed");
         
         // Refund buyer (minus escrow fee for processing)
         uint256 refundAmount = escrow.price;

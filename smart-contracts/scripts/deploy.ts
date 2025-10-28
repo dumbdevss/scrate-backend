@@ -39,14 +39,11 @@ async function main() {
 
   // 4) Verify initial configuration
   console.log("\n4. Verifying initial configuration...");
-  const ipnftName = await ipnft.name();
-  const ipnftSymbol = await ipnft.symbol();
+
   const marketplaceFee = await marketplace.platformFee();
   const escrowFeeRate = await escrow.escrowFeeRate();
   const disputeResolver = await escrow.disputeResolver();
 
-  console.log("IPNFT name:", ipnftName);
-  console.log("IPNFT symbol:", ipnftSymbol);
   console.log("Marketplace platform fee:", marketplaceFee.toString(), "basis points");
   console.log("Escrow fee rate:", escrowFeeRate.toString(), "basis points");
   console.log("Dispute resolver:", disputeResolver);
@@ -59,8 +56,8 @@ async function main() {
       IPNFT: {
         address: ipnftAddress,
         transactionHash: ipnft.deploymentTransaction()?.hash,
-        name: ipnftName,
-        symbol: ipnftSymbol,
+        name: "Intellectual Property NFT",
+        symbol: "IPNFT",
       },
       IPNFTMarketplace: {
         address: marketplaceAddress,

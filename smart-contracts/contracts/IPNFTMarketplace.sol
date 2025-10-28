@@ -106,7 +106,7 @@ contract IPNFTMarketplace is Ownable, ReentrancyGuard {
     );
     
     modifier onlyTokenOwner(address tokenAddress, uint256 tokenId) {
-        require(IERC721(tokenAddress).ownerOf(tokenId) == msg.sender, "Not token owner");
+        require(IPNFT(tokenAddress).ownerOf(tokenId) == msg.sender, "Not token owner");
         _;
     }
     
@@ -137,7 +137,7 @@ contract IPNFTMarketplace is Ownable, ReentrancyGuard {
         require(tokenToAuction[tokenAddress][tokenId] == 0, "Already in auction");
         
         // Transfer token to marketplace
-        IERC721(tokenAddress).transferFrom(msg.sender, address(this), tokenId);
+        require(IPNFT(tokenAddress).transferNFT(msg.sender, address(this), tokenId), "Transfer failed");
         
         _listingIds++;
         uint256 listingId = _listingIds;
@@ -178,11 +178,7 @@ contract IPNFTMarketplace is Ownable, ReentrancyGuard {
         uint256 sellerAmount = listing.price - fee;
         
         // Transfer token to buyer
-        IERC721(listing.tokenAddress).transferFrom(
-            address(this),
-            msg.sender,
-            listing.tokenId
-        );
+        require(IPNFT(listing.tokenAddress).transferNFT(address(this), msg.sender, listing.tokenId), "Transfer failed");
         
         // Transfer payments
         payable(listing.seller).transfer(sellerAmount);
@@ -226,7 +222,7 @@ contract IPNFTMarketplace is Ownable, ReentrancyGuard {
         uint256 sellerAmount = listing.price - fee;
         
         // Transfer token to buyer
-        IERC721(listing.tokenAddress).transferFrom(address(this), msg.sender, listing.tokenId);
+        require(IPNFT(listing.tokenAddress).transferNFT(address(this), msg.sender, listing.tokenId), "Transfer failed");
         
         // Transfer payments
         payable(listing.seller).transfer(sellerAmount);
@@ -264,7 +260,7 @@ contract IPNFTMarketplace is Ownable, ReentrancyGuard {
         tokenToListing[listing.tokenAddress][listing.tokenId] = 0;
         
         // Return token to seller
-        IERC721(listing.tokenAddress).transferFrom(address(this), listing.seller, listing.tokenId);
+        require(IPNFT(listing.tokenAddress).transferNFT(address(this), listing.seller, listing.tokenId), "Transfer failed");
         
         emit ListingCancelled(listingId, listing.tokenAddress, listing.tokenId);
     }
@@ -285,7 +281,7 @@ contract IPNFTMarketplace is Ownable, ReentrancyGuard {
         require(tokenToAuction[tokenAddress][tokenId] == 0, "Already in auction");
         
         // Transfer token to marketplace
-        IERC721(tokenAddress).transferFrom(msg.sender, address(this), tokenId);
+        require(IPNFT(tokenAddress).transferNFT(msg.sender, address(this), tokenId), "Transfer failed");
         
         _auctionIds++;
         uint256 auctionId = _auctionIds;
@@ -366,7 +362,7 @@ contract IPNFTMarketplace is Ownable, ReentrancyGuard {
             uint256 sellerAmount = auction.currentBid - fee;
             
             // Transfer token to winner
-            IERC721(auction.tokenAddress).transferFrom(address(this), auction.currentBidder, auction.tokenId);
+            require(IPNFT(auction.tokenAddress).transferNFT(address(this), auction.currentBidder, auction.tokenId), "Transfer failed");
             
             // Transfer payments
             payable(auction.seller).transfer(sellerAmount);
@@ -377,7 +373,7 @@ contract IPNFTMarketplace is Ownable, ReentrancyGuard {
             emit AuctionEnded(auctionId, auction.currentBidder, auction.currentBid);
         } else {
             // No bids, return token to seller
-            IERC721(auction.tokenAddress).transferFrom(address(this), auction.seller, auction.tokenId);
+            require(IPNFT(auction.tokenAddress).transferNFT(address(this), auction.seller, auction.tokenId), "Transfer failed");
             
             emit AuctionCancelled(auctionId, auction.tokenAddress, auction.tokenId);
         }
@@ -396,7 +392,7 @@ contract IPNFTMarketplace is Ownable, ReentrancyGuard {
         tokenToAuction[auction.tokenAddress][auction.tokenId] = 0;
         
         // Return token to seller
-        IERC721(auction.tokenAddress).transferFrom(address(this), auction.seller, auction.tokenId);
+        require(IPNFT(auction.tokenAddress).transferNFT(address(this), auction.seller, auction.tokenId), "Transfer failed");
         
         emit AuctionCancelled(auctionId, auction.tokenAddress, auction.tokenId);
     }

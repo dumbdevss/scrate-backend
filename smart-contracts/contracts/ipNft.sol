@@ -6,13 +6,14 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
 /**
  * @title IPNFT
  * @dev ERC-721 based Intellectual Property NFT contract
  * Supports minting, transferring, and burning of IP-NFTs with metadata
  */
-contract IPNFT is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, ReentrancyGuard {
+contract IPNFT is ERC721, ERC721URIStorage, ERC721Burnable, ERC721Enumerable, Ownable, ReentrancyGuard {
     uint256 private _tokenIdCounter;
     
     // Mapping from token ID to IP metadata
@@ -375,9 +376,9 @@ contract IPNFT is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, ReentrancyG
     /**
      * @dev Get total number of tokens minted
      */
-    function totalSupply() external view returns (uint256) {
-        return _tokenIdCounter;
-    }
+    function totalSupply() public view override returns (uint256) {
+    return _tokenIdCounter;
+}
     
     /**
      * @dev Check if a token exists
@@ -392,15 +393,9 @@ contract IPNFT is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, ReentrancyG
     function getOwnedTokens(address owner) external view returns (uint256[] memory) {
         uint256 tokenCount = balanceOf(owner);
         uint256[] memory tokens = new uint256[](tokenCount);
-        uint256 index = 0;
-        
-        for (uint256 i = 1; i <= _tokenIdCounter; i++) {
-            if (_ownerOf(i) != address(0) && ownerOf(i) == owner) {
-                tokens[index] = i;
-                index++;
-            }
+        for (uint256 i = 0; i < tokenCount; i++) {
+            tokens[i] = tokenOfOwnerByIndex(owner, i);
         }
-        
         return tokens;
     }
     
@@ -428,10 +423,25 @@ contract IPNFT is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, ReentrancyG
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, ERC721URIStorage)
+        override(ERC721, ERC721URIStorage, ERC721Enumerable)
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
+    }
+    
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override(ERC721, ERC721Enumerable)
+        returns (address)
+    {
+        return super._update(to, tokenId, auth);
+    }
+
+    function _increaseBalance(address account, uint128 value)
+        internal
+        override(ERC721, ERC721Enumerable)
+    {
+        super._increaseBalance(account, value);
     }
     
     // Compatibility functions for marketplace integration
@@ -508,6 +518,7 @@ contract IPNFT is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, ReentrancyG
         require(recipients.length > 0, "Empty arrays");
         require(recipients.length <= 50, "Batch too large"); // Limit batch size
         
+        string[] memory emptyTags = new string[](0);
         uint256[] memory tokenIds = new uint256[](recipients.length);
         
         for (uint256 i = 0; i < recipients.length; i++) {
@@ -524,7 +535,6 @@ contract IPNFT is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, ReentrancyG
             _setTokenURI(tokenId, tokenURIs[i]);
             
             // Store IP metadata with empty tags array for batch efficiency
-            string[] memory emptyTags = new string[](0);
             ipMetadata[tokenId] = IPMetadata({
                 title: titles[i],
                 description: descriptions[i],
